@@ -1,1107 +1,1541 @@
 import unittest
 
-from hyperbase.hyperedge import hedge, build_atom, str2atom, split_edge_str
+import pytest
+
+from hyperbase.builders import build_atom, hedge, split_edge_str, str_to_atom
+from hyperbase.hyperedge import Atom
 
 
 class TestHyperedge(unittest.TestCase):
     def test_hedge1(self):
-        self.assertEqual(hedge('(is hyperbase/1 great/1)').to_str(), '(is hyperbase/1 great/1)')
+        assert str(hedge("(is hyperbase/1 great/1)")) == "(is hyperbase/1 great/1)"
 
     def test_hedge2(self):
-        self.assertEqual(hedge('(src hyperbase/1 (is hyperbase/1 great/1))').to_str(),
-                         '(src hyperbase/1 (is hyperbase/1 great/1))')
+        assert (
+            str(hedge("(src hyperbase/1 (is hyperbase/1 great/1))"))
+            == "(src hyperbase/1 (is hyperbase/1 great/1))"
+        )
 
     def test_hedge3(self):
-        self.assertEqual(hedge('((is my) brain/1 (super great/1))').to_str(), '((is my) brain/1 (super great/1))')
+        assert (
+            str(hedge("((is my) brain/1 (super great/1))"))
+            == "((is my) brain/1 (super great/1))"
+        )
 
     def test_hedge4(self):
-        self.assertEqual(hedge('.'), ('.',))
+        assert hedge(".") == Atom(".")
 
     def test_hedge5(self):
-        self.assertEqual(hedge('(VAR/C)').to_str(), '(VAR/C)')
+        assert str(hedge("(VAR/C)")) == "(VAR/C)"
 
     def test_hedge6(self):
-        self.assertEqual(hedge('((is my) (brain/1) (super great/1))').to_str(), '((is my) (brain/1) (super great/1))')
+        assert (
+            str(hedge("((is my) (brain/1) (super great/1))"))
+            == "((is my) (brain/1) (super great/1))"
+        )
+
+    def test_hedge_double_parens_atom_type(self):
+        # Regression: collapsing nested parens around a single atom must not
+        # bake the inner parens into the new atom_str (which would corrupt
+        # type/role parsing -- e.g. type "Ci" misread as "Ci)").
+        edge = hedge("((foo/Ci))")
+        assert edge.atom
+        atom = edge.all_atoms()[0]
+        assert atom.atom_str == "foo/Ci"
+        assert atom.type() == "Ci"
+        assert str(edge) == "(foo/Ci)"
+
+        # Triple-wrapping must collapse identically.
+        edge3 = hedge("(((foo/Ci)))")
+        atom3 = edge3.all_atoms()[0]
+        assert atom3.atom_str == "foo/Ci"
+        assert atom3.type() == "Ci"
+        assert str(edge3) == "(foo/Ci)"
 
     def test_atom1(self):
-        self.assertTrue(hedge('a').atom)
+        assert hedge("a").atom
 
     def test_atom2(self):
-        self.assertTrue(hedge('hyperbase/C').atom)
+        assert hedge("hyperbase/C").atom
 
     def test_atom3(self):
-        self.assertTrue(hedge('hyperbase/Cn.p/1').atom)
+        assert hedge("hyperbase/Cn.p/1").atom
 
     def test_atom4(self):
-        self.assertTrue(hedge('(X/C)').atom)
+        assert hedge("(X/C)").atom
 
     def test_atom5(self):
-        self.assertFalse(hedge('(is/Pd.sc hyperbase/Cp.s great/C)').atom)
+        assert not hedge("(is/Pd.sc hyperbase/Cp.s great/C)").atom
 
     def test_atom_parts1(self):
-        self.assertEqual(hedge('hyperbase/C').parts(), ['hyperbase', 'C'])
+        assert hedge("hyperbase/C").parts() == ["hyperbase", "C"]
 
     def test_atom_parts2(self):
-        self.assertEqual(hedge('hyperbase').parts(), ['hyperbase'])
+        assert hedge("hyperbase").parts() == ["hyperbase"]
 
     def test_atom_parts3(self):
-        self.assertEqual(hedge('go/P.so/1').parts(), ['go', 'P.so', '1'])
+        assert hedge("go/P.so/1").parts() == ["go", "P.so", "1"]
 
     def test_atom_parts4(self):
-        self.assertEqual(hedge('(X/P.so/1)').parts(), ['X', 'P.so', '1'])
+        assert hedge("(X/P.so/1)").parts() == ["X", "P.so", "1"]
 
     def test_root1(self):
-        self.assertEqual(hedge('hyperbase/C').root(), 'hyperbase')
+        assert hedge("hyperbase/C").root() == "hyperbase"
 
     def test_root2(self):
-        self.assertEqual(hedge('go/P.so/1').root(), 'go')
+        assert hedge("go/P.so/1").root() == "go"
 
     def test_build_atom1(self):
-        self.assertEqual(build_atom('hyperbase', 'C'), hedge('hyperbase/C'))
+        assert build_atom("hyperbase", "C") == hedge("hyperbase/C")
 
     def test_build_atom2(self):
-        self.assertEqual(build_atom('go', 'P.so', '1'), hedge('go/P.so/1'))
+        assert build_atom("go", "P.so", "1") == hedge("go/P.so/1")
 
     def test_replace_atom_part1(self):
-        self.assertEqual(hedge('hyperbase/C').replace_atom_part(0, 'x'), hedge('x/C'))
+        assert hedge("hyperbase/C").replace_atom_part(0, "x") == hedge("x/C")
 
     def test_replace_atom_part2(self):
-        self.assertEqual(hedge('xxx/1/yyy').replace_atom_part(1, '77'), hedge('xxx/77/yyy'))
+        assert hedge("xxx/1/yyy").replace_atom_part(1, "77") == hedge("xxx/77/yyy")
 
     def test_replace_atom_part3(self):
-        self.assertEqual(hedge('(XXX/1/yyy)').replace_atom_part(1, '77'), hedge('(XXX/77/yyy)'))
+        assert hedge("(XXX/1/yyy)").replace_atom_part(1, "77") == hedge("(XXX/77/yyy)")
 
-    def test_str2atom1(self):
-        self.assertEqual(str2atom('abc'), 'abc')
+    def test_str_to_atom1(self):
+        assert str_to_atom("abc") == "abc"
 
-    def test_str2atom2(self):
-        self.assertEqual(str2atom('abc%'), 'abc%25')
+    def test_str_to_atom2(self):
+        assert str_to_atom("abc%") == "abc%25"
 
-    def test_str2atom3(self):
-        self.assertEqual(str2atom('/abc'), '%2fabc')
+    def test_str_to_atom3(self):
+        assert str_to_atom("/abc") == "%2fabc"
 
-    def test_str2atom4(self):
-        self.assertEqual(str2atom('a bc'), 'a%20bc')
+    def test_str_to_atom4(self):
+        assert str_to_atom("a bc") == "a%20bc"
 
-    def test_str2atom5(self):
-        self.assertEqual(str2atom('ab(c'), 'ab%28c')
+    def test_str_to_atom5(self):
+        assert str_to_atom("ab(c") == "ab%28c"
 
-    def test_str2atom6(self):
-        self.assertEqual(str2atom('abc)'), 'abc%29')
+    def test_str_to_atom6(self):
+        assert str_to_atom("abc)") == "abc%29"
 
-    def test_str2atom7(self):
-        self.assertEqual(str2atom('.abc'), '%2eabc')
+    def test_str_to_atom7(self):
+        assert str_to_atom(".abc") == "%2eabc"
 
-    def test_str2atom8(self):
-        self.assertEqual(str2atom('a*bc'), 'a%2abc')
+    def test_str_to_atom8(self):
+        assert str_to_atom("a*bc") == "a%2abc"
 
-    def test_str2atom9(self):
-        self.assertEqual(str2atom('ab&c'), 'ab%26c')
+    def test_str_to_atom9(self):
+        assert str_to_atom("ab&c") == "ab%26c"
 
-    def test_str2atom10(self):
-        self.assertEqual(str2atom('abc@'), 'abc%40')
+    def test_str_to_atom10(self):
+        assert str_to_atom("abc@") == "abc%40"
 
-    def test_str2atom11(self):
-        self.assertEqual(str2atom('graph brain/(1).'), 'graph%20brain%2f%281%29%2e')
+    def test_str_to_atom11(self):
+        assert str_to_atom("graph brain/(1).") == "graph%20brain%2f%281%29%2e"
 
     def test_split_edge_str1(self):
-        self.assertEqual(split_edge_str('is hyperbase/1 great/1'), ('is', 'hyperbase/1', 'great/1'))
+        assert split_edge_str("is hyperbase/1 great/1") == (
+            "is",
+            "hyperbase/1",
+            "great/1",
+        )
 
     def test_split_edge_str2(self):
-        self.assertEqual(split_edge_str('size hyperbase/1 7'), ('size', 'hyperbase/1', '7'))
+        assert split_edge_str("size hyperbase/1 7") == ("size", "hyperbase/1", "7")
 
     def test_split_edge_str3(self):
-        self.assertEqual(split_edge_str('size hyperbase/1 7.0'), ('size', 'hyperbase/1', '7.0'))
+        assert split_edge_str("size hyperbase/1 7.0") == ("size", "hyperbase/1", "7.0")
 
     def test_split_edge_str4(self):
-        self.assertEqual(split_edge_str('size hyperbase/1 -7'), ('size', 'hyperbase/1', '-7'))
+        assert split_edge_str("size hyperbase/1 -7") == ("size", "hyperbase/1", "-7")
 
     def test_split_edge_str5(self):
-        self.assertEqual(split_edge_str('size hyperbase/1 -7.0'), ('size', 'hyperbase/1', '-7.0'))
+        assert split_edge_str("size hyperbase/1 -7.0") == (
+            "size",
+            "hyperbase/1",
+            "-7.0",
+        )
 
     def test_split_edge_str6(self):
-        self.assertEqual(split_edge_str('src hyperbase/1 (is hyperbase/1 great/1)'),
-                         ('src', 'hyperbase/1', '(is hyperbase/1 great/1)'))
+        assert split_edge_str("src hyperbase/1 (is hyperbase/1 great/1)") == (
+            "src",
+            "hyperbase/1",
+            "(is hyperbase/1 great/1)",
+        )
 
     def test_to_str(self):
-        self.assertEqual(
-            hedge('(is hyperbase/C great/C)').to_str(), '(is hyperbase/C great/C)')
-        self.assertEqual(hedge('(src hyperbase/C (is hyperbase/C great/C))').to_str(),
-                         '(src hyperbase/C (is hyperbase/C great/C))')
-
-    def test_ent2str_roots_only(self):
-        self.assertEqual(hedge('(is hyperbase/C great/C)').to_str(roots_only=True), '(is hyperbase great)')
-        self.assertEqual(hedge('(src hyperbase/C (is hyperbase/C great/C))').to_str(roots_only=True),
-                         '(src hyperbase (is hyperbase great))')
+        assert str(hedge("(is hyperbase/C great/C)")) == "(is hyperbase/C great/C)"
+        assert (
+            str(hedge("(src hyperbase/C (is hyperbase/C great/C))"))
+            == "(src hyperbase/C (is hyperbase/C great/C))"
+        )
 
     def test_label1(self):
-        self.assertEqual(hedge('graph%20brain%2f%281%29%2e/Cn.s/.').label(), 'graph brain/(1).')
+        assert hedge("graph%20brain%2f%281%29%2e/Cn.s/.").label() == "graph brain/(1)."
 
     def test_label2(self):
-        self.assertEqual(hedge('(red/M shoes/C)').label(), 'red shoes')
+        assert hedge("(red/M shoes/C)").label() == "red shoes"
 
     def test_label3(self):
-        self.assertEqual(hedge('(of/B capital/C germany/C)').label(), 'capital of germany')
+        assert hedge("(of/B capital/C germany/C)").label() == "capital of germany"
 
     def test_label4(self):
-        self.assertEqual(hedge('(+/B/. capital/C germany/C)').label(), 'capital germany')
+        assert hedge("(+/B/. capital/C germany/C)").label() == "capital germany"
 
     def test_label5(self):
-        self.assertEqual(hedge('(of/B capital/C west/C germany/C)').label(), 'capital of west germany')
+        assert (
+            hedge("(of/B capital/C west/C germany/C)").label()
+            == "capital of west germany"
+        )
 
     def test_label6(self):
-        self.assertEqual(hedge('(of/B capital/C (and/B belgium/C europe/C))').label(), 'capital of belgium and europe')
+        assert (
+            hedge("(of/B capital/C (and/B belgium/C europe/C))").label()
+            == "capital of belgium and europe"
+        )
 
     def test_connector_atom1(self):
-        edge = hedge('(is/P.sc hyperbase/1 great/1)')
-        self.assertEqual(edge.connector_atom(), hedge('is/P.sc'))
+        edge = hedge("(is/P.sc hyperbase/1 great/1)")
+        assert edge.connector_atom() == hedge("is/P.sc")
 
     def test_connector_atom2(self):
-        edge = hedge('((not/M is/P.sc) hyperbase/1 great/1)')
-        self.assertEqual(edge.connector_atom(), hedge('is/P.sc'))
+        edge = hedge("((not/M is/P.sc) hyperbase/1 great/1)")
+        assert edge.connector_atom() == hedge("is/P.sc")
 
     def test_connector_atom3(self):
-        edge = hedge('((maybe/M (not/M is/P.sc)) hyperbase/1 great/1)')
-        self.assertEqual(edge.connector_atom(), hedge('is/P.sc'))
+        edge = hedge("((maybe/M (not/M is/P.sc)) hyperbase/1 great/1)")
+        assert edge.connector_atom() == hedge("is/P.sc")
 
     def test_connector_atom4(self):
-        edge = hedge('(((and/J not/M nope/M) is/P.sc) hyperbase/1 great/1)')
-        self.assertEqual(edge.connector_atom(), hedge('is/P.sc'))
+        edge = hedge("(((and/J not/M nope/M) is/P.sc) hyperbase/1 great/1)")
+        assert edge.connector_atom() == hedge("is/P.sc")
 
     def test_atoms1(self):
-        self.assertEqual(hedge('(is hyperbase/1 great/1)').atoms(),
-                         {hedge('is'), hedge('hyperbase/1'), hedge('great/1')})
+        assert hedge("(is hyperbase/1 great/1)").atoms() == {
+            hedge("is"),
+            hedge("hyperbase/1"),
+            hedge("great/1"),
+        }
 
     def test_atoms2(self):
-        self.assertEqual(hedge('(src hyperbase/2 (is hyperbase/1 great/1))').atoms(),
-                         {hedge('is'), hedge('hyperbase/1'), hedge('great/1'), hedge('src'), hedge('hyperbase/2')})
+        assert hedge("(src hyperbase/2 (is hyperbase/1 great/1))").atoms() == {
+            hedge("is"),
+            hedge("hyperbase/1"),
+            hedge("great/1"),
+            hedge("src"),
+            hedge("hyperbase/2"),
+        }
 
     def test_atoms3(self):
-        self.assertEqual(hedge('hyperbase/1').atoms(), {hedge('hyperbase/1')})
+        assert hedge("hyperbase/1").atoms() == {hedge("hyperbase/1")}
 
     def test_atoms4(self):
-        edge = hedge('(the/Md (of/Br mayor/Cc (the/Md city/Cs)))')
-        self.assertEqual(edge.atoms(), {hedge('the/Md'), hedge('of/Br'), hedge('mayor/Cc'), hedge('city/Cs')})
-        self.assertEqual(hedge('(is (X/C) great/1)').atoms(), {hedge('is'), hedge('(X/C)'), hedge('great/1')})
+        edge = hedge("(the/Md (of/Br mayor/Cc (the/Md city/Cs)))")
+        assert edge.atoms() == {
+            hedge("the/Md"),
+            hedge("of/Br"),
+            hedge("mayor/Cc"),
+            hedge("city/Cs"),
+        }
+        assert hedge("(is (X/C) great/1)").atoms() == {
+            hedge("is"),
+            hedge("(X/C)"),
+            hedge("great/1"),
+        }
 
     def test_all_atoms1(self):
-        self.assertEqual(hedge('(is hyperbase/1 great/1)').all_atoms(),
-                         [hedge('is'), hedge('hyperbase/1'), hedge('great/1')])
+        assert hedge("(is hyperbase/1 great/1)").all_atoms() == [
+            hedge("is"),
+            hedge("hyperbase/1"),
+            hedge("great/1"),
+        ]
 
     def test_all_atoms2(self):
-        self.assertEqual(hedge('(src hyperbase/2 (is hyperbase/1 great/1))').all_atoms(),
-                         [hedge('src'), hedge('hyperbase/2'), hedge('is'), hedge('hyperbase/1'), hedge('great/1')])
+        assert hedge("(src hyperbase/2 (is hyperbase/1 great/1))").all_atoms() == [
+            hedge("src"),
+            hedge("hyperbase/2"),
+            hedge("is"),
+            hedge("hyperbase/1"),
+            hedge("great/1"),
+        ]
 
     def test_all_atoms3(self):
-        self.assertEqual(hedge('hyperbase/1').all_atoms(), [hedge('hyperbase/1')])
+        assert hedge("hyperbase/1").all_atoms() == [hedge("hyperbase/1")]
 
     def test_all_atoms4(self):
-        edge = hedge('(the/Md (of/Br mayor/Cc (the/Md city/Cs)))')
-        self.assertEqual(edge.all_atoms(),
-                         [hedge('the/Md'), hedge('of/Br'), hedge('mayor/Cc'), hedge('the/Md'), hedge('city/Cs')])
+        edge = hedge("(the/Md (of/Br mayor/Cc (the/Md city/Cs)))")
+        assert edge.all_atoms() == [
+            hedge("the/Md"),
+            hedge("of/Br"),
+            hedge("mayor/Cc"),
+            hedge("the/Md"),
+            hedge("city/Cs"),
+        ]
 
     def test_all_atoms5(self):
-        edge = hedge('(the/Md (of/Br (X/C) (the/Md city/Cs)))')
-        self.assertEqual(edge.all_atoms(),
-                         [hedge('the/Md'), hedge('of/Br'), hedge('(X/C)'), hedge('the/Md'), hedge('city/Cs')])
+        edge = hedge("(the/Md (of/Br (X/C) (the/Md city/Cs)))")
+        assert edge.all_atoms() == [
+            hedge("the/Md"),
+            hedge("of/Br"),
+            hedge("(X/C)"),
+            hedge("the/Md"),
+            hedge("city/Cs"),
+        ]
 
     def test_size1(self):
-        self.assertEqual(hedge('hyperbase/1').size(), 1)
+        assert hedge("hyperbase/1").size() == 1
 
     def test_size2(self):
-        self.assertEqual(hedge('(X/C)').size(), 1)
+        assert hedge("(X/C)").size() == 1
 
     def test_size3(self):
-        self.assertEqual(hedge('(is hyperbase/1 great/1)').size(), 3)
+        assert hedge("(is hyperbase/1 great/1)").size() == 3
 
     def test_size4(self):
-        self.assertEqual(hedge('(is hyperbase/1 (super great/1))').size(), 4)
+        assert hedge("(is hyperbase/1 (super great/1))").size() == 4
 
     def test_depth1(self):
-        self.assertEqual(hedge('hyperbase/1').depth(), 0)
+        assert hedge("hyperbase/1").depth() == 0
 
     def test_depth2(self):
-        self.assertEqual(hedge('(is hyperbase/1 great/1)').depth(), 1)
+        assert hedge("(is hyperbase/1 great/1)").depth() == 1
 
     def test_depth3(self):
-        self.assertEqual(hedge('(is hyperbase/1 (super great/1))').depth(), 2)
+        assert hedge("(is hyperbase/1 (super great/1))").depth() == 2
 
     def test_depth4(self):
-        self.assertEqual(hedge('(is hyperbase/1 (super (X/C)))').depth(), 2)
-
-    def test_roots1(self):
-        self.assertEqual(hedge('hyperbase/1').roots(), hedge('hyperbase'))
-
-    def test_roots2(self):
-        self.assertEqual(hedge('(is hyperbase/1 great/1)').roots(), hedge('(is hyperbase great)'))
-
-    def test_roots3(self):
-        self.assertEqual(hedge('(is hyperbase/1 (super great/1))').roots(), hedge('(is hyperbase (super great))'))
+        assert hedge("(is hyperbase/1 (super (X/C)))").depth() == 2
 
     def test_contains(self):
-        edge = hedge('(is/Pd.sc piron/C (of/B capital/C piripiri/C))')
-        self.assertTrue(edge.contains(hedge('is/Pd.sc')))
-        self.assertTrue(edge.contains(hedge('piron/C')))
-        self.assertTrue(edge.contains(hedge('(of/B capital/C piripiri/C)')))
-        self.assertFalse(edge.contains(hedge('piripiri/C')))
-        self.assertFalse(edge.contains(hedge('1111/C')))
+        edge = hedge("(is/Pd.sc piron/C (of/B capital/C piripiri/C))")
+        assert edge.contains(hedge("is/Pd.sc"))
+        assert edge.contains(hedge("piron/C"))
+        assert edge.contains(hedge("(of/B capital/C piripiri/C)"))
+        assert edge.contains(hedge("piripiri/C"))
+        assert not edge.contains(hedge("1111/C"))
 
     def test_contains_pares_atom(self):
-        edge = hedge('(is/Pd.sc (X/C) (of/B capital/C piripiri/C))')
-        self.assertTrue(edge.contains(hedge('is/Pd.sc')))
-        self.assertTrue(edge.contains(hedge('(X/C)')))
-        self.assertTrue(edge.contains(hedge('(of/B capital/C piripiri/C)')))
-        self.assertFalse(edge.contains(hedge('piripiri/C')))
-        self.assertFalse(edge.contains(hedge('1111/C')))
-
-    def test_contains_deep(self):
-        edge = hedge('(is/Pd.sc piron/C (of/B capital/C piripiri/C))')
-        self.assertTrue(edge.contains(hedge('is/Pd.sc'), deep=True))
-        self.assertTrue(edge.contains(hedge('piron/C'), deep=True))
-        self.assertTrue(edge.contains(hedge('(of/B capital/C piripiri/C)'), deep=True))
-        self.assertTrue(edge.contains(hedge('piripiri/C'), deep=True))
-        self.assertFalse(edge.contains(hedge('1111/C'), deep=True))
-
-    def test_contains_deep_pares_atom(self):
-        edge = hedge('(is/Pd.sc piron/C (of/B capital/C (XYZ)))')
-        self.assertTrue(edge.contains(hedge('is/Pd.sc'), deep=True))
-        self.assertTrue(edge.contains(hedge('piron/C'), deep=True))
-        self.assertTrue(edge.contains(hedge('(of/B capital/C (XYZ))'), deep=True))
-        self.assertTrue(edge.contains(hedge('(XYZ)'), deep=True))
-        self.assertFalse(edge.contains(hedge('1111/C'), deep=True))
+        edge = hedge("(is/Pd.sc piron/C (of/B capital/C (XYZ)))")
+        assert edge.contains(hedge("is/Pd.sc"))
+        assert edge.contains(hedge("piron/C"))
+        assert edge.contains(hedge("(of/B capital/C (XYZ))"))
+        assert edge.contains(hedge("(XYZ)"))
+        assert not edge.contains(hedge("1111/C"))
 
     def test_subedges1(self):
-        self.assertEqual(hedge('hyperbase/1').subedges(), {hedge('hyperbase/1')})
+        assert hedge("hyperbase/1").subedges() == {hedge("hyperbase/1")}
 
     def test_subedges2(self):
-        self.assertEqual(hedge('(is hyperbase/1 great/1)').subedges(),
-                         {hedge('is'), hedge('hyperbase/1'), hedge('great/1'), hedge('(is hyperbase/1 great/1)')})
+        assert hedge("(is hyperbase/1 great/1)").subedges() == {
+            hedge("is"),
+            hedge("hyperbase/1"),
+            hedge("great/1"),
+            hedge("(is hyperbase/1 great/1)"),
+        }
 
     def test_subedges3(self):
-        self.assertEqual(hedge('(is hyperbase/1 (super great/1))').subedges(),
-                         {hedge('is'), hedge('hyperbase/1'), hedge('super'), hedge('great/1'),
-                          hedge('(super great/1)'), hedge('(is hyperbase/1 (super great/1))')})
+        assert hedge("(is hyperbase/1 (super great/1))").subedges() == {
+            hedge("is"),
+            hedge("hyperbase/1"),
+            hedge("super"),
+            hedge("great/1"),
+            hedge("(super great/1)"),
+            hedge("(is hyperbase/1 (super great/1))"),
+        }
 
     def test_subedges4(self):
-        self.assertEqual(hedge('(is hyperbase/1 (X/C))').subedges(),
-                         {hedge('is'), hedge('hyperbase/1'), hedge('(X/C)'), hedge('(is hyperbase/1 (X/C))')})
-
-    def test_insert_first_argument1(self):
-        self.assertEqual(hedge('a').insert_first_argument(hedge('b')).to_str(), '(a b)')
-
-    def test_insert_first_argument2(self):
-        result = hedge('(a b)').insert_first_argument(hedge('(c d)'))
-        self.assertEqual(result.to_str(), '(a (c d) b)')
-
-    def test_connect1(self):
-        self.assertEqual(hedge('(a b)').connect(hedge('(c d)')).to_str(), '(a b c d)')
-
-    def test_connect2(self):
-        self.assertEqual(hedge('(a b)').connect(hedge('()')).to_str(), '(a b)')
-
-    def test_sequence(self):
-        ab = hedge('(a b)')
-        c = hedge('c')
-        cd = hedge('(c d)')
-        self.assertEqual(ab.sequence(c, before=True).to_str(), '(c a b)')
-        self.assertEqual(ab.sequence(c, before=False).to_str(), '(a b c)')
-        self.assertEqual(ab.sequence(cd, before=True).to_str(), '(c d a b)')
-        self.assertEqual(ab.sequence(cd, before=False).to_str(), '(a b c d)')
-        self.assertEqual(ab.sequence(cd, before=True, flat=False).to_str(), '((c d) (a b))')
-        self.assertEqual(ab.sequence(cd, before=False, flat=False).to_str(), '((a b) (c d))')
-
-    def test_replace_atom(self):
-        x = hedge('x')
-        xc = hedge('x/C')
-        self.assertEqual(hedge('x').replace_atom(x, xc).to_str(), 'x/C')
-        self.assertEqual(hedge('(a b x)').replace_atom(x, xc).to_str(), '(a b x/C)')
-        self.assertEqual(hedge('(a b c)').replace_atom(x, xc).to_str(), '(a b c)')
-        self.assertEqual(hedge('(a x (b x))').replace_atom(x, xc).to_str(), '(a x/C (b x/C))')
-
-    def test_replace_atom_unique(self):
-        edge = hedge('(a/P x/C x/C)')
-        x1 = edge[1]
-        x2 = edge[2]
-        y = hedge('y/C')
-        self.assertEqual(edge.replace_atom(x1, y, unique=True).to_str(), '(a/P y/C x/C)')
-        self.assertEqual(edge.replace_atom(x2, y, unique=True).to_str(), '(a/P x/C y/C)')
-        self.assertEqual(edge.replace_atom(hedge('x/C'), y, unique=True).to_str(), '(a/P x/C x/C)')
+        assert hedge("(is hyperbase/1 (X/C))").subedges() == {
+            hedge("is"),
+            hedge("hyperbase/1"),
+            hedge("(X/C)"),
+            hedge("(is hyperbase/1 (X/C))"),
+        }
 
     def test_atom_role(self):
-        self.assertEqual(hedge('hyperbase/Cp.s/1').role(), ['Cp', 's'])
+        assert hedge("hyperbase/Cp.s/1").role() == ["Cp", "s"]
 
     def test_atom_role_implied_conjunction(self):
-        self.assertEqual(hedge('and').role(), ['J'])
+        assert hedge("and").role() == ["J"]
 
     def test_atom_simplify_atom1(self):
-        self.assertEqual(hedge('hyperbase/Cp.s/1').simplify(), hedge('hyperbase/C/1'))
+        assert hedge("hyperbase/Cp/1").simplify() == hedge("hyperbase/C")
 
     def test_atom_simplify_atom2(self):
-        self.assertEqual(hedge('hyperbase').simplify(), hedge('hyperbase'))
+        assert hedge("hyperbase").simplify() == hedge("hyperbase")
 
     def test_atom_simplify_atom3(self):
-        self.assertEqual(hedge('say/Pd.sr.|f----/en').simplify(), hedge('say/P/en'))
+        assert hedge("say/Pd.sr.|f----/en").simplify() == hedge("say/P.sr")
 
     def test_atom_simplify_atom4(self):
-        self.assertEqual(hedge('say/Pd.sr.|f----/en').simplify(subtypes=True), hedge('say/Pd/en'))
+        assert hedge("say/Pd.sr.|f----/en").simplify(subtypes=True) == hedge(
+            "say/Pd.sr"
+        )
 
     def test_atom_simplify_atom5(self):
-        self.assertEqual(hedge('say/Pd.sr.|f----/en').simplify(argroles=True), hedge('say/P.sr/en'))
-
-    def test_atom_simplify_atom6(self):
-        self.assertEqual(hedge('say/Pd.sr.|f----/en').simplify(namespaces=False), hedge('say/P'))
-
-    def test_atom_simplify_atom7(self):
-        self.assertEqual(hedge('say/Pd.sr.|f----/en').simplify(subtypes=True, namespaces=False), hedge('say/Pd'))
+        assert hedge("say/Pd.sr.|f----/en").simplify(namespaces=True) == hedge(
+            "say/P.sr/en"
+        )
 
     def test_atom_simplify_edge(self):
-        edge = hedge('is/Pd.sc.|f----/en mary/Cp.s/en nice/Ca/en')
-        self.assertEqual(edge.simplify(), hedge('is/P/en mary/C/en nice/C/en'))
-        self.assertEqual(edge.simplify(subtypes=True), hedge('is/Pd/en mary/Cp/en nice/Ca/en'))
-        self.assertEqual(edge.simplify(argroles=True), hedge('is/P.sc/en mary/C/en nice/C/en'))
-        self.assertEqual(edge.simplify(argroles=True, namespaces=False), hedge('is/P.sc mary/C nice/C'))
+        edge = hedge("is/Pd.sc.|f----/en mary/Cp.s/en nice/Ca/en")
+        assert edge.simplify() == hedge("is/P.sc mary/C nice/C")
+        assert edge.simplify(subtypes=True) == hedge("is/Pd.sc mary/Cp nice/Ca")
+        assert edge.simplify(namespaces=True) == hedge("is/P.sc/en mary/C/en nice/C/en")
+        assert edge.simplify(subtypes=True, namespaces=True) == hedge(
+            "is/Pd.sc/en mary/Cp/en nice/Ca/en"
+        )
 
     def test_atom_type(self):
-        self.assertEqual(hedge('hyperbase/Cp.s/1').type(), 'Cp')
+        assert hedge("hyperbase/Cp.s/1").type() == "Cp"
 
     def test_atom_mtype(self):
-        self.assertEqual(hedge('hyperbase/Cp.s/1').mtype(), 'C')
+        assert hedge("hyperbase/Cp.s/1").mtype() == "C"
 
     def test_atom_type_implied_conjunction(self):
-        self.assertEqual(hedge('and').type(), 'J')
+        assert hedge("and").type() == "J"
 
     def test_non_atom_type1(self):
-        self.assertEqual(hedge('(is/Pd.so hyperbase/Cp.s great/C)').type(), 'Rd')
+        assert hedge("(is/Pd.so hyperbase/Cp.s great/C)").type() == "Rd"
 
     def test_non_atom_type2(self):
-        self.assertEqual(hedge('(red/M shoes/Cc.p)').type(), 'Cc')
+        assert hedge("(red/M shoes/Cc.p)").type() == "Cc"
 
     def test_non_atom_type3(self):
-        self.assertEqual(hedge('(before/Tt noon/C)').type(), 'St')
+        assert hedge("(before/Tt noon/C)").type() == "St"
 
     def test_non_atom_type4(self):
-        self.assertEqual(hedge('(very/M large/M)').type(), 'M')
+        assert hedge("(very/M large/M)").type() == "M"
 
     def test_non_atom_type5(self):
-        self.assertEqual(hedge('((very/M large/M) shoes/Cc.p)').type(), 'Cc')
+        assert hedge("((very/M large/M) shoes/Cc.p)").type() == "Cc"
 
     def test_non_atom_type6(self):
-        self.assertEqual(hedge('(will/M be/Pd.sc)').type(), 'Pd')
+        assert hedge("(will/M be/Pd.sc)").type() == "Pd"
 
     def test_non_atom_type7(self):
-        self.assertEqual(hedge('((will/M be/Pd.sc) john/Cp.s rich/C)').type(), 'Rd')
+        assert hedge("((will/M be/Pd.sc) john/Cp.s rich/C)").type() == "Rd"
 
     def test_non_atom_type8(self):
-        self.assertEqual(hedge('(play/T piano/Cc.s)').type(), 'S')
+        assert hedge("(play/T piano/Cc.s)").type() == "S"
 
     def test_non_atom_type9(self):
-        self.assertEqual(hedge('(and/J meat/Cc.s potatoes/Cc.p)').type(), 'C')
+        assert hedge("(and/J meat/Cc.s potatoes/Cc.p)").type() == "C"
 
     def test_non_atom_type10(self):
-        self.assertEqual(hedge('(and/J (is/Pd.so hyperbase/Cp.s great/C))').type(), 'R')
+        assert hedge("(and/J (is/Pd.so hyperbase/Cp.s great/C))").type() == "R"
 
     def test_non_atom_mtype1(self):
-        self.assertEqual(hedge('(is/Pd.so hyperbase/Cp.s great/C)').type(), 'Rd')
+        assert hedge("(is/Pd.so hyperbase/Cp.s great/C)").type() == "Rd"
 
     def test_non_atom_mtype2(self):
-        self.assertEqual(hedge('(red/M shoes/Cc.p)').mtype(), 'C')
+        assert hedge("(red/M shoes/Cc.p)").mtype() == "C"
 
     def test_non_atom_mtype3(self):
-        self.assertEqual(hedge('(before/Tt noon/C)').mtype(), 'S')
+        assert hedge("(before/Tt noon/C)").mtype() == "S"
 
     def test_non_atom_mtype4(self):
-        self.assertEqual(hedge('(very/M large/M)').mtype(), 'M')
+        assert hedge("(very/M large/M)").mtype() == "M"
 
     def test_non_atom_mtype5(self):
-        self.assertEqual(hedge('((very/M large/M) shoes/Cc.p)').mtype(), 'C')
+        assert hedge("((very/M large/M) shoes/Cc.p)").mtype() == "C"
 
     def test_non_atom_mtype6(self):
-        self.assertEqual(hedge('(will/M be/Pd.sc)').mtype(), 'P')
+        assert hedge("(will/M be/Pd.sc)").mtype() == "P"
 
     def test_non_atom_mtype7(self):
-        self.assertEqual(hedge('((will/M be/Pd.sc) john/Cp.s rich/C)').mtype(), 'R')
+        assert hedge("((will/M be/Pd.sc) john/Cp.s rich/C)").mtype() == "R"
 
     def test_non_atom_mtype8(self):
-        self.assertEqual(hedge('(play/T piano/Cc.s)').mtype(), 'S')
+        assert hedge("(play/T piano/Cc.s)").mtype() == "S"
 
     def test_non_atom_mtype9(self):
-        self.assertEqual(hedge('(and/J meat/Cc.s potatoes/Cc.p)').mtype(), 'C')
+        assert hedge("(and/J meat/Cc.s potatoes/Cc.p)").mtype() == "C"
 
     def test_non_atom_mtype10(self):
-        self.assertEqual(hedge('(and/J (is/Pd.so hyperbase/Cp.s great/C))').mtype(), 'R')
+        assert hedge("(and/J (is/Pd.so hyperbase/Cp.s great/C))").mtype() == "R"
+
+    def test_atom_type_long_subtype(self):
+        assert hedge("exp/Cmath").type() == "Cmath"
+        assert hedge("exp/Cmath").mtype() == "C"
+
+    def test_atom_role_long_subtype(self):
+        assert hedge("was/Ppast.so").role() == ["Ppast", "so"]
+        assert hedge("was/Ppast.so").type() == "Ppast"
+        assert hedge("was/Ppast.so").mtype() == "P"
+        assert hedge("was/Ppast.so").argroles() == "so"
+
+    def test_non_atom_type_long_subtype(self):
+        assert hedge("(was/Ppast.so john/C art/C)").type() == "Rpast"
+        assert hedge("(was/Ppast.so john/C art/C)").mtype() == "R"
+
+    def test_non_atom_type_long_modifier_subtype(self):
+        assert hedge("(red/Mcolor shoes/Cc.p)").type() == "Cc"
+        assert hedge("(before/Tlong noon/C)").type() == "Slong"
 
     def test_connector_type1(self):
-        self.assertEqual(hedge('hyperbase/Cp.s/1').connector_type(), None)
+        assert hedge("hyperbase/Cp.s/1").connector_type() is None
 
     def test_connector_type2(self):
-        self.assertEqual(hedge('hyperbase').connector_type(), None)
+        assert hedge("hyperbase").connector_type() is None
 
     def test_connector_type3(self):
-        self.assertEqual(hedge('(is/Pd.so hyperbase/Cp.s great/C)').connector_type(), 'Pd')
+        assert hedge("(is/Pd.so hyperbase/Cp.s great/C)").connector_type() == "Pd"
 
     def test_connector_type4(self):
-        self.assertEqual(hedge('(red/M shoes/Cn.p)').connector_type(), 'M')
+        assert hedge("(red/M shoes/Cn.p)").connector_type() == "M"
 
     def test_connector_type5(self):
-        self.assertEqual(hedge('(before/Tt noon/C)').connector_type(), 'Tt')
+        assert hedge("(before/Tt noon/C)").connector_type() == "Tt"
 
     def test_connector_type6(self):
-        self.assertEqual(hedge('(very/M large/M)').connector_type(), 'M')
+        assert hedge("(very/M large/M)").connector_type() == "M"
 
     def test_connector_type7(self):
-        self.assertEqual(hedge('((very/M large/M) shoes/Cn.p)').connector_type(), 'M')
+        assert hedge("((very/M large/M) shoes/Cn.p)").connector_type() == "M"
 
     def test_connector_type8(self):
-        self.assertEqual(hedge('(will/M be/Pd.sc)').connector_type(), 'M')
+        assert hedge("(will/M be/Pd.sc)").connector_type() == "M"
 
     def test_connector_type9(self):
-        self.assertEqual(hedge('((will/M be/Pd.sc) john/Cp.s rich/C)').connector_type(), 'Pd')
+        assert hedge("((will/M be/Pd.sc) john/Cp.s rich/C)").connector_type() == "Pd"
 
     def test_connector_type10(self):
-        self.assertEqual(hedge('(play/T piano/Cn.s)').connector_type(), 'T')
+        assert hedge("(play/T piano/Cn.s)").connector_type() == "T"
 
     def test_connector_mtype1(self):
-        self.assertEqual(hedge('hyperbase/Cp.s/1').connector_mtype(), None)
+        assert hedge("hyperbase/Cp.s/1").connector_mtype() is None
 
     def test_connector_mtype2(self):
-        self.assertEqual(hedge('hyperbase').connector_mtype(), None)
+        assert hedge("hyperbase").connector_mtype() is None
 
     def test_connector_mtype3(self):
-        self.assertEqual(hedge('(is/Pd.so hyperbase/Cp.s great/C)').connector_mtype(), 'P')
+        assert hedge("(is/Pd.so hyperbase/Cp.s great/C)").connector_mtype() == "P"
 
     def test_connector_mtype4(self):
-        self.assertEqual(hedge('(red/M shoes/Cn.p)').connector_mtype(), 'M')
+        assert hedge("(red/M shoes/Cn.p)").connector_mtype() == "M"
 
     def test_connector_mtype5(self):
-        self.assertEqual(hedge('(before/Tt noon/C)').connector_mtype(), 'T')
+        assert hedge("(before/Tt noon/C)").connector_mtype() == "T"
 
     def test_connector_mtype6(self):
-        self.assertEqual(hedge('(very/M large/M)').connector_mtype(), 'M')
+        assert hedge("(very/M large/M)").connector_mtype() == "M"
 
     def test_connector_mtype7(self):
-        self.assertEqual(hedge('((very/M large/M) shoes/Cn.p)').connector_mtype(), 'M')
+        assert hedge("((very/M large/M) shoes/Cn.p)").connector_mtype() == "M"
 
     def test_connector_mtype8(self):
-        self.assertEqual(hedge('(will/M be/Pd.sc)').connector_mtype(), 'M')
+        assert hedge("(will/M be/Pd.sc)").connector_mtype() == "M"
 
     def test_connector_mtype9(self):
-        self.assertEqual(hedge('((will/M be/Pd.sc) john/Cp.s rich/C)').connector_mtype(), 'P')
+        assert hedge("((will/M be/Pd.sc) john/Cp.s rich/C)").connector_mtype() == "P"
 
     def test_connector_mtype10(self):
-        self.assertEqual(hedge('(play/T piano/Cn.s)').connector_mtype(), 'T')
+        assert hedge("(play/T piano/Cn.s)").connector_mtype() == "T"
 
     def test_t1(self):
-        self.assertEqual(hedge('hyperbase/Cp.s/1').t, 'Cp')
+        assert hedge("hyperbase/Cp.s/1").t == "Cp"
 
     def test_t2(self):
-        self.assertEqual(hedge('(is/Pd.so hyperbase/Cp.s great/C)').t, 'Rd')
+        assert hedge("(is/Pd.so hyperbase/Cp.s great/C)").t == "Rd"
 
     def test_t3(self):
-        self.assertEqual(hedge('(very/M large/M)').t, 'M')
+        assert hedge("(very/M large/M)").t == "M"
 
     def test_mt1(self):
-        self.assertEqual(hedge('hyperbase/Cp.s/1').mt, 'C')
+        assert hedge("hyperbase/Cp.s/1").mt == "C"
 
     def test_mt2(self):
-        self.assertEqual(hedge('(is/Pd.so hyperbase/Cp.s great/C)').mt, 'R')
+        assert hedge("(is/Pd.so hyperbase/Cp.s great/C)").mt == "R"
 
     def test_mt3(self):
-        self.assertEqual(hedge('(very/M large/M)').mt, 'M')
+        assert hedge("(very/M large/M)").mt == "M"
 
     def test_ct1(self):
-        self.assertEqual(hedge('hyperbase/Cp.s/1').ct, None)
+        assert hedge("hyperbase/Cp.s/1").ct is None
 
     def test_ct2(self):
-        self.assertEqual(hedge('(is/Pd.so hyperbase/Cp.s great/C)').ct, 'Pd')
+        assert hedge("(is/Pd.so hyperbase/Cp.s great/C)").ct == "Pd"
 
     def test_ct3(self):
-        self.assertEqual(hedge('(red/M shoes/Cn.p)').ct, 'M')
+        assert hedge("(red/M shoes/Cn.p)").ct == "M"
 
     def test_cmt1(self):
-        self.assertEqual(hedge('hyperbase/Cp.s/1').cmt, None)
+        assert hedge("hyperbase/Cp.s/1").cmt is None
 
     def test_cmt2(self):
-        self.assertEqual(hedge('(is/Pd.so hyperbase/Cp.s great/C)').cmt, 'P')
+        assert hedge("(is/Pd.so hyperbase/Cp.s great/C)").cmt == "P"
 
     def test_cmt3(self):
-        self.assertEqual(hedge('(red/M shoes/Cn.p)').cmt, 'M')
+        assert hedge("(red/M shoes/Cn.p)").cmt == "M"
 
     def test_atom_with_type1(self):
-        self.assertEqual(hedge('(+/B a/Cn b/Cp)').atom_with_type('C'), hedge('a/Cn'))
+        assert hedge("(+/B a/Cn b/Cp)").atom_with_type("C") == hedge("a/Cn")
 
     def test_atom_with_type2(self):
-        self.assertEqual(hedge('(+/B a/C b/Cp)').atom_with_type('Cp'), hedge('b/Cp'))
+        assert hedge("(+/B a/C b/Cp)").atom_with_type("Cp") == hedge("b/Cp")
 
     def test_atom_with_type3(self):
-        self.assertEqual(hedge('(+/B a/C b/Cp)').atom_with_type('P'), None)
+        assert hedge("(+/B a/C b/Cp)").atom_with_type("P") is None
 
     def test_atom_with_type4(self):
-        self.assertEqual(hedge('a/Cn').atom_with_type('C'), hedge('a/Cn'))
+        assert hedge("a/Cn").atom_with_type("C") == hedge("a/Cn")
 
     def test_atom_with_type5(self):
-        self.assertEqual(hedge('a/Cn').atom_with_type('Cn'), hedge('a/Cn'))
+        assert hedge("a/Cn").atom_with_type("Cn") == hedge("a/Cn")
 
     def test_atom_with_type6(self):
-        self.assertEqual(hedge('a/Cn').atom_with_type('Cp'), None)
+        assert hedge("a/Cn").atom_with_type("Cp") is None
 
     def test_atom_with_type7(self):
-        self.assertEqual(hedge('a/Cn').atom_with_type('P'), None)
+        assert hedge("a/Cn").atom_with_type("P") is None
 
-    def test_contains_atom_type1(self):
-        self.assertTrue(hedge('(+/B a/Cn b/Cp)').contains_atom_type('C'))
+    def test_atom_with_type_long_subtype1(self):
+        edge = hedge("(is/Pd.so john/Cmath rich/C)")
+        assert edge.atom_with_type("Cmath") == hedge("john/Cmath")
 
-    def test_contains_atom_type2(self):
-        self.assertTrue(hedge('(+/B a/C b/Cp)').contains_atom_type('Cp'))
+    def test_atom_with_type_long_subtype2(self):
+        edge = hedge("(is/Pd.so john/Cmath rich/C)")
+        assert edge.atom_with_type("C") == hedge("john/Cmath")
 
-    def test_contains_atom_type3(self):
-        self.assertFalse(hedge('(+/B a/C b/Cp)').contains_atom_type('P'))
+    def test_atom_with_type_long_subtype3(self):
+        edge = hedge("(is/Pd.so john/Cmath rich/C)")
+        assert edge.atom_with_type("Cmusic") is None
 
-    def test_contains_atom_type4(self):
-        self.assertTrue(hedge('a/Cn').contains_atom_type('C'))
+    def test_atom_with_type_partial_subtype_no_match(self):
+        edge = hedge("(is/Pd.so john/Cmath rich/C)")
+        assert edge.atom_with_type("Cm") is None
 
-    def test_contains_atom_type5(self):
-        self.assertTrue(hedge('a/Cn').contains_atom_type('Cn'))
-
-    def test_contains_atom_type6(self):
-        self.assertFalse(hedge('a/Cn').contains_atom_type('Cp'))
-
-    def test_contains_atom_type7(self):
-        self.assertFalse(hedge('a/Cn').contains_atom_type('P'))
+    def test_atom_with_type_short_subtype_no_match_against_long(self):
+        edge = hedge("(is/Pd.so john/Cmath rich/Cm)")
+        assert edge.atom_with_type("Cm") == hedge("rich/Cm")
 
     def test_argroles_connector_atom1(self):
-        edge = hedge('s/Bp.am')
-        self.assertEqual(edge.argroles(), 'am')
+        edge = hedge("s/Bp.am")
+        assert edge.argroles() == "am"
 
     def test_argroles_connector_atom2(self):
-        edge = hedge('come/Pd.sx.-i----/en')
-        self.assertEqual(edge.argroles(), 'sx')
+        edge = hedge("come/Pd.sx.-i----/en")
+        assert edge.argroles() == "sx"
 
     def test_argroles_connector_atom3(self):
-        edge = hedge('come/Pd')
-        self.assertEqual(edge.argroles(), '')
+        edge = hedge("come/Pd")
+        assert edge.argroles() == ""
 
     def test_argroles_connector_atom4(self):
-        edge = hedge('red/M')
-        self.assertEqual(edge.argroles(), '')
+        edge = hedge("red/M")
+        assert edge.argroles() == ""
 
     def test_argroles_connector_atom5(self):
-        edge = hedge('berlin/Cp.s/de')
-        self.assertEqual(edge.argroles(), '')
+        edge = hedge("berlin/Cp.s/de")
+        assert edge.argroles() == ""
 
     def test_argroles_connector_edge1(self):
-        edge = hedge('(is/Mv.|f--3s/en influenced/Pd.xpa.<pf---/en)')
-        self.assertEqual(edge.argroles(), 'xpa')
+        edge = hedge("(is/Mv.|f--3s/en influenced/Pd.xpa.<pf---/en)")
+        assert edge.argroles() == "xpa"
 
     def test_argroles_connector_edge2(self):
-        edge = hedge('(is/Mv.|f--3s/en influenced/Pd)')
-        self.assertEqual(edge.argroles(), '')
+        edge = hedge("(is/Mv.|f--3s/en influenced/Pd)")
+        assert edge.argroles() == ""
 
     def test_argroles_edge1(self):
-        edge = hedge('((not/M is/P.sc) bob/C sad/C)')
-        self.assertEqual(edge.argroles(), 'sc')
+        edge = hedge("((not/M is/P.sc) bob/C sad/C)")
+        assert edge.argroles() == "sc"
 
     def test_argroles_edge2(self):
-        edge = hedge('(of/B.ma city/C berlin/C)')
-        self.assertEqual(edge.argroles(), 'ma')
+        edge = hedge("(of/B.ma city/C berlin/C)")
+        assert edge.argroles() == "ma"
 
     def test_argroles_edge3(self):
-        edge = hedge('(of/B city/C berlin/C)')
-        self.assertEqual(edge.argroles(), '')
+        edge = hedge("(of/B city/C berlin/C)")
+        assert edge.argroles() == ""
 
     def test_replace_argroles_atom1(self):
-        edge = hedge('s/Bp.am')
-        self.assertEqual(edge.replace_argroles('ma').to_str(), 's/Bp.ma')
+        edge = hedge("s/Bp.am")
+        assert str(edge.replace_argroles("ma")) == "s/Bp.ma"
 
     def test_replace_argroles_atom2(self):
-        edge = hedge('come/Pd.sx.-i----/en')
-        self.assertEqual(edge.replace_argroles('scx').to_str(), 'come/Pd.scx.-i----/en')
+        edge = hedge("come/Pd.sx.-i----/en")
+        assert str(edge.replace_argroles("scx")) == "come/Pd.scx.-i----/en"
 
     def test_replace_argroles_atom3(self):
-        edge = hedge('come/Pd/en')
-        self.assertEqual(edge.replace_argroles('scx').to_str(), 'come/Pd.scx/en')
+        edge = hedge("come/Pd/en")
+        assert str(edge.replace_argroles("scx")) == "come/Pd.scx/en"
 
     def test_replace_argroles_atom4(self):
-        edge = hedge('xxx')
-        self.assertEqual(edge.replace_argroles('scx').to_str(), 'xxx')
+        edge = hedge("xxx")
+        assert str(edge.replace_argroles("scx")) == "xxx"
 
-    def test_insert_argrole_atom1(self):
-        edge = hedge('s/Bp.am')
-        self.assertEqual(edge.insert_argrole('m', 0).to_str(), 's/Bp.mam')
+    def test__insert_argrole_atom1(self):
+        edge = hedge("s/Bp.am")
+        assert str(edge._insert_argrole("m", 0)) == "s/Bp.mam"
 
-    def test_insert_argrole_atom2(self):
-        edge = hedge('s/Bp.am')
-        self.assertEqual(edge.insert_argrole('m', 1).to_str(), 's/Bp.amm')
+    def test__insert_argrole_atom2(self):
+        edge = hedge("s/Bp.am")
+        assert str(edge._insert_argrole("m", 1)) == "s/Bp.amm"
 
-    def test_insert_argrole_atom3(self):
-        edge = hedge('s/Bp.am')
-        self.assertEqual(edge.insert_argrole('m', 2).to_str(), 's/Bp.amm')
+    def test__insert_argrole_atom3(self):
+        edge = hedge("s/Bp.am")
+        assert str(edge._insert_argrole("m", 2)) == "s/Bp.amm"
 
-    def test_insert_argrole_atom4(self):
-        edge = hedge('s/Bp.am')
-        self.assertEqual(edge.insert_argrole('m', 3).to_str(), 's/Bp.amm')
+    def test__insert_argrole_atom4(self):
+        edge = hedge("s/Bp.am")
+        assert str(edge._insert_argrole("m", 3)) == "s/Bp.amm"
 
-    def test_insert_argrole_atom5(self):
-        edge = hedge('come/Pd.sx.-i----/en')
-        self.assertEqual(edge.insert_argrole('x', 0).to_str(), 'come/Pd.xsx.-i----/en')
+    def test__insert_argrole_atom5(self):
+        edge = hedge("come/Pd.sx.-i----/en")
+        assert str(edge._insert_argrole("x", 0)) == "come/Pd.xsx.-i----/en"
 
-    def test_insert_argrole_atom6(self):
-        edge = hedge('come/Pd.sx.-i----/en')
-        self.assertEqual(edge.insert_argrole('x', 1).to_str(), 'come/Pd.sxx.-i----/en')
+    def test__insert_argrole_atom6(self):
+        edge = hedge("come/Pd.sx.-i----/en")
+        assert str(edge._insert_argrole("x", 1)) == "come/Pd.sxx.-i----/en"
 
-    def test_insert_argrole_atom7(self):
-        edge = hedge('come/Pd.sx.-i----/en')
-        self.assertEqual(edge.insert_argrole('x', 2).to_str(), 'come/Pd.sxx.-i----/en')
+    def test__insert_argrole_atom7(self):
+        edge = hedge("come/Pd.sx.-i----/en")
+        assert str(edge._insert_argrole("x", 2)) == "come/Pd.sxx.-i----/en"
 
-    def test_insert_argrole_atom8(self):
-        edge = hedge('come/Pd.sx.-i----/en')
-        self.assertEqual(edge.insert_argrole('x', 100).to_str(), 'come/Pd.sxx.-i----/en')
+    def test__insert_argrole_atom8(self):
+        edge = hedge("come/Pd.sx.-i----/en")
+        assert str(edge._insert_argrole("x", 100)) == "come/Pd.sxx.-i----/en"
 
-    def test_insert_argrole_atom9(self):
-        edge = hedge('come/Pd/en')
-        self.assertEqual(edge.insert_argrole('s', 0).to_str(), 'come/Pd.s/en')
+    def test__insert_argrole_atom9(self):
+        edge = hedge("come/Pd/en")
+        assert str(edge._insert_argrole("s", 0)) == "come/Pd.s/en"
 
-    def test_insert_argrole_atom10(self):
-        edge = hedge('come/Pd/en')
-        self.assertEqual(edge.insert_argrole('s', 1).to_str(), 'come/Pd.s/en')
+    def test__insert_argrole_atom10(self):
+        edge = hedge("come/Pd/en")
+        assert str(edge._insert_argrole("s", 1)) == "come/Pd.s/en"
 
-    def test_insert_argrole_atom11(self):
-        edge = hedge('come/Pd/en')
-        self.assertEqual(edge.insert_argrole('s', 100).to_str(), 'come/Pd.s/en')
+    def test__insert_argrole_atom11(self):
+        edge = hedge("come/Pd/en")
+        assert str(edge._insert_argrole("s", 100)) == "come/Pd.s/en"
 
-    def test_insert_argrole_atom12(self):
-        edge = hedge('xxx')
-        self.assertEqual(edge.insert_argrole('s', 0).to_str(), 'xxx')
+    def test__insert_argrole_atom12(self):
+        edge = hedge("xxx")
+        assert str(edge._insert_argrole("s", 0)) == "xxx"
 
-    def test_insert_argrole_atom13(self):
-        edge = hedge('xxx')
-        self.assertEqual(edge.insert_argrole('s', 1).to_str(), 'xxx')
+    def test__insert_argrole_atom13(self):
+        edge = hedge("xxx")
+        assert str(edge._insert_argrole("s", 1)) == "xxx"
 
-    def test_insert_argrole_atom14(self):
-        edge = hedge('xxx')
-        self.assertEqual(edge.insert_argrole('s', 100).to_str(), 'xxx')
+    def test__insert_argrole_atom14(self):
+        edge = hedge("xxx")
+        assert str(edge._insert_argrole("s", 100)) == "xxx"
 
     def test_replace_argroles_edge1(self):
-        edge = hedge('(s/Bp.am x/C y/C)')
-        self.assertEqual(edge.replace_argroles('ma').to_str(), '(s/Bp.ma x/C y/C)')
+        edge = hedge("(s/Bp.am x/C y/C)")
+        assert str(edge.replace_argroles("ma")) == "(s/Bp.ma x/C y/C)"
 
     def test_replace_argroles_edge2(self):
-        edge = hedge('((m/M s/Bp.am) x/C y/C)')
-        self.assertEqual(edge.replace_argroles('ma').to_str(), '((m/M s/Bp.ma) x/C y/C)')
+        edge = hedge("((m/M s/Bp.am) x/C y/C)")
+        assert str(edge.replace_argroles("ma")) == "((m/M s/Bp.ma) x/C y/C)"
 
     def test_replace_argroles_edge3(self):
-        edge = hedge('(come/Pd.sx.-i----/en you/C here/C)')
-        self.assertEqual(edge.replace_argroles('scx').to_str(), '(come/Pd.scx.-i----/en you/C here/C)')
+        edge = hedge("(come/Pd.sx.-i----/en you/C here/C)")
+        assert (
+            str(edge.replace_argroles("scx")) == "(come/Pd.scx.-i----/en you/C here/C)"
+        )
 
     def test_replace_argroles_edge4(self):
-        edge = hedge('(come/Pd/en you/C here/C)')
-        self.assertEqual(edge.replace_argroles('scx').to_str(), '(come/Pd.scx/en you/C here/C)')
+        edge = hedge("(come/Pd/en you/C here/C)")
+        assert str(edge.replace_argroles("scx")) == "(come/Pd.scx/en you/C here/C)"
 
     def test_replace_argroles_edge5(self):
-        edge = hedge('((do/M come/Pd/en) you/C here/C)')
-        self.assertEqual(edge.replace_argroles('scx').to_str(), '((do/M come/Pd.scx/en) you/C here/C)')
+        edge = hedge("((do/M come/Pd/en) you/C here/C)")
+        assert (
+            str(edge.replace_argroles("scx")) == "((do/M come/Pd.scx/en) you/C here/C)"
+        )
 
     def test_replace_argroles_edge6(self):
-        edge = hedge('(come you/C here/C)')
-        self.assertEqual(edge.replace_argroles('scx').to_str(), '(come you/C here/C)')
+        edge = hedge("(come you/C here/C)")
+        assert str(edge.replace_argroles("scx")) == "(come you/C here/C)"
 
-    def test_insert_argrole_edge1(self):
-        edge = hedge('(s/Bp.am x/C y/C)')
-        self.assertEqual(edge.insert_argrole('m', 0).to_str(), '(s/Bp.mam x/C y/C)')
+    def test__insert_argrole_edge1(self):
+        edge = hedge("(s/Bp.am x/C y/C)")
+        assert str(edge._insert_argrole("m", 0)) == "(s/Bp.mam x/C y/C)"
 
-    def test_insert_argrole_edge2(self):
-        edge = hedge('(s/Bp.am x/C y/C)')
-        self.assertEqual(edge.insert_argrole('m', 1).to_str(), '(s/Bp.amm x/C y/C)')
+    def test__insert_argrole_edge2(self):
+        edge = hedge("(s/Bp.am x/C y/C)")
+        assert str(edge._insert_argrole("m", 1)) == "(s/Bp.amm x/C y/C)"
 
-    def test_insert_argrole_edge3(self):
-        edge = hedge('(s/Bp.am x/C y/C)')
-        self.assertEqual(edge.insert_argrole('m', 2).to_str(), '(s/Bp.amm x/C y/C)')
+    def test__insert_argrole_edge3(self):
+        edge = hedge("(s/Bp.am x/C y/C)")
+        assert str(edge._insert_argrole("m", 2)) == "(s/Bp.amm x/C y/C)"
 
-    def test_insert_argrole_edge4(self):
-        edge = hedge('(s/Bp.am x/C y/C)')
-        self.assertEqual(edge.insert_argrole('m', 3).to_str(), '(s/Bp.amm x/C y/C)')
+    def test__insert_argrole_edge4(self):
+        edge = hedge("(s/Bp.am x/C y/C)")
+        assert str(edge._insert_argrole("m", 3)) == "(s/Bp.amm x/C y/C)"
 
-    def test_insert_argrole_edge5(self):
-        edge = hedge('((m/M s/Bp.am) x/C y/C)')
-        self.assertEqual(edge.insert_argrole('m', 0).to_str(), '((m/M s/Bp.mam) x/C y/C)')
+    def test__insert_argrole_edge5(self):
+        edge = hedge("((m/M s/Bp.am) x/C y/C)")
+        assert str(edge._insert_argrole("m", 0)) == "((m/M s/Bp.mam) x/C y/C)"
 
-    def test_insert_argrole_edge6(self):
-        edge = hedge('(come/Pd.sx.-i----/en you/C here/C)')
-        self.assertEqual(edge.insert_argrole('x', 0).to_str(), '(come/Pd.xsx.-i----/en you/C here/C)')
+    def test__insert_argrole_edge6(self):
+        edge = hedge("(come/Pd.sx.-i----/en you/C here/C)")
+        assert (
+            str(edge._insert_argrole("x", 0)) == "(come/Pd.xsx.-i----/en you/C here/C)"
+        )
 
-    def test_insert_argrole_edge7(self):
-        edge = hedge('(come/Pd.sx.-i----/en you/C here/C)')
-        self.assertEqual(edge.insert_argrole('x', 1).to_str(), '(come/Pd.sxx.-i----/en you/C here/C)')
+    def test__insert_argrole_edge7(self):
+        edge = hedge("(come/Pd.sx.-i----/en you/C here/C)")
+        assert (
+            str(edge._insert_argrole("x", 1)) == "(come/Pd.sxx.-i----/en you/C here/C)"
+        )
 
-    def test_insert_argrole_edge8(self):
-        edge = hedge('(come/Pd.sx.-i----/en you/C here/C)')
-        self.assertEqual(edge.insert_argrole('x', 2).to_str(), '(come/Pd.sxx.-i----/en you/C here/C)')
+    def test__insert_argrole_edge8(self):
+        edge = hedge("(come/Pd.sx.-i----/en you/C here/C)")
+        assert (
+            str(edge._insert_argrole("x", 2)) == "(come/Pd.sxx.-i----/en you/C here/C)"
+        )
 
-    def test_insert_argrole_edge9(self):
-        edge = hedge('(come/Pd.sx.-i----/en you/C here/C)')
-        self.assertEqual(edge.insert_argrole('x', 100).to_str(), '(come/Pd.sxx.-i----/en you/C here/C)')
+    def test__insert_argrole_edge9(self):
+        edge = hedge("(come/Pd.sx.-i----/en you/C here/C)")
+        assert (
+            str(edge._insert_argrole("x", 100))
+            == "(come/Pd.sxx.-i----/en you/C here/C)"
+        )
 
-    def test_insert_argrole_edge10(self):
-        edge = hedge('(come/Pd/en you/C here/C)')
-        self.assertEqual(edge.insert_argrole('s', 0).to_str(), '(come/Pd.s/en you/C here/C)')
+    def test__insert_argrole_edge10(self):
+        edge = hedge("(come/Pd/en you/C here/C)")
+        assert str(edge._insert_argrole("s", 0)) == "(come/Pd.s/en you/C here/C)"
 
-    def test_insert_argrole_edge11(self):
-        edge = hedge('(come/Pd/en you/C here/C)')
-        self.assertEqual(edge.insert_argrole('s', 1).to_str(), '(come/Pd.s/en you/C here/C)')
+    def test__insert_argrole_edge11(self):
+        edge = hedge("(come/Pd/en you/C here/C)")
+        assert str(edge._insert_argrole("s", 1)) == "(come/Pd.s/en you/C here/C)"
 
-    def test_insert_argrole_edge12(self):
-        edge = hedge('(come/Pd/en you/C here/C)')
-        self.assertEqual(edge.insert_argrole('s', 100).to_str(), '(come/Pd.s/en you/C here/C)')
+    def test__insert_argrole_edge12(self):
+        edge = hedge("(come/Pd/en you/C here/C)")
+        assert str(edge._insert_argrole("s", 100)) == "(come/Pd.s/en you/C here/C)"
 
-    def test_insert_argrole_edge13(self):
-        edge = hedge('(come you/C here/C)')
-        self.assertEqual(edge.insert_argrole('s', 0).to_str(), '(come you/C here/C)')
+    def test__insert_argrole_edge13(self):
+        edge = hedge("(come you/C here/C)")
+        assert str(edge._insert_argrole("s", 0)) == "(come you/C here/C)"
 
-    def test_insert_argrole_edge14(self):
-        edge = hedge('(come you/C here/C)')
-        self.assertEqual(edge.insert_argrole('s', 1).to_str(), '(come you/C here/C)')
+    def test__insert_argrole_edge14(self):
+        edge = hedge("(come you/C here/C)")
+        assert str(edge._insert_argrole("s", 1)) == "(come you/C here/C)"
 
-    def test_insert_argrole_edge15(self):
-        edge = hedge('(come you/C here/C)')
-        self.assertEqual(edge.insert_argrole('s', 100).to_str(), '(come you/C here/C)')
+    def test__insert_argrole_edge15(self):
+        edge = hedge("(come you/C here/C)")
+        assert str(edge._insert_argrole("s", 100)) == "(come you/C here/C)"
 
-    def test_insert_argrole_edge16(self):
-        edge = hedge('((do/M come/Pd.sx.-i----/en) you/C here/C)')
-        self.assertEqual(edge.insert_argrole('x', 2).to_str(), '((do/M come/Pd.sxx.-i----/en) you/C here/C)')
+    def test__insert_argrole_edge16(self):
+        edge = hedge("((do/M come/Pd.sx.-i----/en) you/C here/C)")
+        assert (
+            str(edge._insert_argrole("x", 2))
+            == "((do/M come/Pd.sxx.-i----/en) you/C here/C)"
+        )
 
-    def test_insert_edge_with_argrole1(self):
-        edge = hedge('(is/Pd.sc/en sky/C blue/C)')
-        self.assertEqual(edge.insert_edge_with_argrole(hedge('today/C'), 'x', 0),
-                         hedge('(is/Pd.xsc/en today/C sky/C blue/C)'))
-        self.assertEqual(edge.insert_edge_with_argrole(hedge('today/C'), 'x', 1),
-                         hedge('(is/Pd.sxc/en sky/C today/C blue/C)'))
-        self.assertEqual(edge.insert_edge_with_argrole(hedge('today/C'), 'x', 2),
-                         hedge('(is/Pd.scx/en sky/C blue/C today/C)'))
-        self.assertEqual(edge.insert_edge_with_argrole(hedge('today/C'), 'x', 100),
-                         hedge('(is/Pd.scx/en sky/C blue/C today/C)'))
+    def test_add_argument1(self):
+        edge = hedge("(is/Pd.sc/en sky/C blue/C)")
+        assert edge.add_argument(hedge("today/C"), "x", 0) == hedge(
+            "(is/Pd.xsc/en today/C sky/C blue/C)"
+        )
+        assert edge.add_argument(hedge("today/C"), "x", 1) == hedge(
+            "(is/Pd.sxc/en sky/C today/C blue/C)"
+        )
+        assert edge.add_argument(hedge("today/C"), "x", 2) == hedge(
+            "(is/Pd.scx/en sky/C blue/C today/C)"
+        )
+        assert edge.add_argument(hedge("today/C"), "x", 100) == hedge(
+            "(is/Pd.scx/en sky/C blue/C today/C)"
+        )
 
-    def test_insert_edge_with_argrole2(self):
-        edge = hedge('((not/M is/Pd.sc/en) sky/C blue/C)')
-        self.assertEqual(edge.insert_edge_with_argrole(hedge('today/C'), 'x', 1),
-                         hedge('((not/M is/Pd.sxc/en) sky/C today/C blue/C)'))
+    def test_add_argument2(self):
+        edge = hedge("((not/M is/Pd.sc/en) sky/C blue/C)")
+        assert edge.add_argument(hedge("today/C"), "x", 1) == hedge(
+            "((not/M is/Pd.sxc/en) sky/C today/C blue/C)"
+        )
 
-    def test_insert_edge_with_argrole3(self):
-        edge = hedge('((m/M b/B.am) x/C y/C)')
-        self.assertEqual(edge.insert_edge_with_argrole(hedge('z/C'), 'a', 2),
-                         hedge('((m/M b/B.ama) x/C y/C z/C)'))
+    def test_add_argument3(self):
+        edge = hedge("((m/M b/B.am) x/C y/C)")
+        assert edge.add_argument(hedge("z/C"), "a", 2) == hedge(
+            "((m/M b/B.ama) x/C y/C z/C)"
+        )
+
+    def test_add_argument_no_pos1(self):
+        edge = hedge("(is/Pd.sc/en sky/C blue/C)")
+        assert edge.add_argument(hedge("today/C"), "x") == hedge(
+            "(is/Pd.scx/en sky/C blue/C today/C)"
+        )
+
+    def test_add_argument_no_pos2(self):
+        edge = hedge("((not/M is/Pd.sc/en) sky/C blue/C)")
+        assert edge.add_argument(hedge("today/C"), "x") == hedge(
+            "((not/M is/Pd.scx/en) sky/C blue/C today/C)"
+        )
+
+    def test_add_argument_no_pos3(self):
+        edge = hedge("((m/M b/B.am) x/C y/C)")
+        assert edge.add_argument(hedge("z/C"), "a") == hedge(
+            "((m/M b/B.ama) x/C y/C z/C)"
+        )
 
     def test_replace_argroles_var1(self):
-        edge = hedge('((var s/Bp.am V) x/C y/C)')
-        self.assertEqual(edge.replace_argroles('ma').to_str(), '((var s/Bp.ma V) x/C y/C)')
+        edge = hedge("((var s/Bp.am V) x/C y/C)")
+        assert str(edge.replace_argroles("ma")) == "((var s/Bp.ma V) x/C y/C)"
 
     def test_replace_argroles_var2(self):
-        edge = hedge('((var (m/M s/Bp.am) V) x/C y/C)')
-        self.assertEqual(edge.replace_argroles('ma').to_str(), '((var (m/M s/Bp.ma) V) x/C y/C)')
+        edge = hedge("((var (m/M s/Bp.am) V) x/C y/C)")
+        assert str(edge.replace_argroles("ma")) == "((var (m/M s/Bp.ma) V) x/C y/C)"
 
     def test_replace_argroles_var3(self):
-        edge = hedge('((var come/Pd.sx.-i----/en V) you/C here/C)')
-        self.assertEqual(edge.replace_argroles('scx').to_str(), '((var come/Pd.scx.-i----/en V) you/C here/C)')
+        edge = hedge("((var come/Pd.sx.-i----/en V) you/C here/C)")
+        assert (
+            str(edge.replace_argroles("scx"))
+            == "((var come/Pd.scx.-i----/en V) you/C here/C)"
+        )
 
     def test_replace_argroles_var4(self):
-        edge = hedge('((var come/Pd/en V) you/C here/C)')
-        self.assertEqual(edge.replace_argroles('scx').to_str(), '((var come/Pd.scx/en V) you/C here/C)')
+        edge = hedge("((var come/Pd/en V) you/C here/C)")
+        assert (
+            str(edge.replace_argroles("scx")) == "((var come/Pd.scx/en V) you/C here/C)"
+        )
 
     def test_replace_argroles_var5(self):
-        edge = hedge('((var (do/M come/Pd/en) V) you/C here/C)')
-        self.assertEqual(edge.replace_argroles('scx').to_str(), '((var (do/M come/Pd.scx/en) V) you/C here/C)')
+        edge = hedge("((var (do/M come/Pd/en) V) you/C here/C)")
+        assert (
+            str(edge.replace_argroles("scx"))
+            == "((var (do/M come/Pd.scx/en) V) you/C here/C)"
+        )
 
     def test_replace_argroles_var6(self):
-        edge = hedge('((var come V) you/C here/C)')
-        self.assertEqual(edge.replace_argroles('scx').to_str(), '((var come V) you/C here/C)')
+        edge = hedge("((var come V) you/C here/C)")
+        assert str(edge.replace_argroles("scx")) == "((var come V) you/C here/C)"
 
-    def test_insert_argrole_var1(self):
-        edge = hedge('((var s/Bp.am V) x/C y/C)')
-        self.assertEqual(edge.insert_argrole('m', 0).to_str(), '((var s/Bp.mam V) x/C y/C)')
+    def test__insert_argrole_var1(self):
+        edge = hedge("((var s/Bp.am V) x/C y/C)")
+        assert str(edge._insert_argrole("m", 0)) == "((var s/Bp.mam V) x/C y/C)"
 
-    def test_insert_argrole_var2(self):
-        edge = hedge('((var come/Pd.sx.-i----/en V) you/C here/C)')
-        self.assertEqual(edge.insert_argrole('x', 1).to_str(), '((var come/Pd.sxx.-i----/en V) you/C here/C)')
+    def test__insert_argrole_var2(self):
+        edge = hedge("((var come/Pd.sx.-i----/en V) you/C here/C)")
+        assert (
+            str(edge._insert_argrole("x", 1))
+            == "((var come/Pd.sxx.-i----/en V) you/C here/C)"
+        )
 
-    def test_insert_argrole_var3(self):
-        edge = hedge('((var come/Pd/en V) you/C here/C)')
-        self.assertEqual(edge.insert_argrole('s', 100).to_str(), '((var come/Pd.s/en V) you/C here/C)')
+    def test__insert_argrole_var3(self):
+        edge = hedge("((var come/Pd/en V) you/C here/C)")
+        assert (
+            str(edge._insert_argrole("s", 100)) == "((var come/Pd.s/en V) you/C here/C)"
+        )
 
-    def test_insert_argrole_var4(self):
-        edge = hedge('((var (do/M come/Pd.sx.-i----/en) V) you/C here/C)')
-        self.assertEqual(edge.insert_argrole('x', 2).to_str(), '((var (do/M come/Pd.sxx.-i----/en) V) you/C here/C)')
+    def test__insert_argrole_var4(self):
+        edge = hedge("((var (do/M come/Pd.sx.-i----/en) V) you/C here/C)")
+        assert (
+            str(edge._insert_argrole("x", 2))
+            == "((var (do/M come/Pd.sxx.-i----/en) V) you/C here/C)"
+        )
 
     def test_insert_edge_with_var1(self):
-        edge = hedge('((var is/Pd.sc/en V) sky/C blue/C)')
-        self.assertEqual(edge.insert_edge_with_argrole(hedge('today/C'), 'x', 0),
-                         hedge('((var is/Pd.xsc/en V) today/C sky/C blue/C)'))
+        edge = hedge("((var is/Pd.sc/en V) sky/C blue/C)")
+        assert edge.add_argument(hedge("today/C"), "x", 0) == hedge(
+            "((var is/Pd.xsc/en V) today/C sky/C blue/C)"
+        )
 
     def test_insert_edge_with_var2(self):
-        edge = hedge('((var (m/M b/B.am) V) x/C y/C)')
-        self.assertEqual(edge.insert_edge_with_argrole(hedge('z/C'), 'a', 2),
-                         hedge('((var (m/M b/B.ama) V) x/C y/C z/C)'))
+        edge = hedge("((var (m/M b/B.am) V) x/C y/C)")
+        assert edge.add_argument(hedge("z/C"), "a", 2) == hedge(
+            "((var (m/M b/B.ama) V) x/C y/C z/C)"
+        )
 
-    def test_edges_with_argrole(self):
-        edge_str = ("((have/Mv.|f----/en (been/Mv.<pf---/en tracking/Pd.sox.|pg---/en)) (from/Br.ma/en "
-                    "satellites/Cc.p/en (and/B+/en nasa/Cp.s/en (other/Ma/en agencies/Cc.p/en))) "
-                    "(+/B.aam/. sea/Cc.s/en ice/Cc.s/en changes/Cc.p/en) (since/Tt/en 1979/C#/en))")
+    def test_arguments_with_role(self):
+        edge_str = (
+            "((have/Mv.|f----/en (been/Mv.<pf---/en tracking/Pd.sox.|pg---/en)) (from/Br.ma/en "
+            "satellites/Cc.p/en (and/B+/en nasa/Cp.s/en (other/Ma/en agencies/Cc.p/en))) "
+            "(+/B.aam/. sea/Cc.s/en ice/Cc.s/en changes/Cc.p/en) (since/Tt/en 1979/C#/en))"
+        )
         edge = hedge(edge_str)
 
-        subj = hedge("(from/Br.ma/en satellites/Cc.p/en (and/B+/en nasa/Cp.s/en (other/Ma/en agencies/Cc.p/en)))")
+        subj = hedge(
+            "(from/Br.ma/en satellites/Cc.p/en (and/B+/en nasa/Cp.s/en (other/Ma/en agencies/Cc.p/en)))"
+        )
         obj = hedge("(+/B.aam/. sea/Cc.s/en ice/Cc.s/en changes/Cc.p/en)")
         spec = hedge("(since/Tt/en 1979/C#/en)")
 
-        self.assertEqual(edge.edges_with_argrole('s'), [subj])
-        self.assertEqual(edge.edges_with_argrole('o'), [obj])
-        self.assertEqual(edge.edges_with_argrole('x'), [spec])
-        self.assertEqual(edge.edges_with_argrole('p'), [])
+        assert edge.arguments_with_role("s") == [subj]
+        assert edge.arguments_with_role("o") == [obj]
+        assert edge.arguments_with_role("x") == [spec]
+        assert edge.arguments_with_role("p") == []
 
-    def test_edges_with_argrole_no_roles(self):
-        edge_str = ("((have/Mv.|f----/en (been/Mv.<pf---/en tracking/Pd)) (from/Br.ma/en satellites/Cc.p/en "
-                    "(and/B+/en nasa/Cp.s/en (other/Ma/en agencies/Cc.p/en))) "
-                    "(+/B.aam/. sea/Cc.s/en ice/Cc.s/en changes/Cc.p/en) (since/Tt/en 1979/C#/en))")
+    def test_arguments_with_role_no_roles(self):
+        edge_str = (
+            "((have/Mv.|f----/en (been/Mv.<pf---/en tracking/Pd)) (from/Br.ma/en satellites/Cc.p/en "
+            "(and/B+/en nasa/Cp.s/en (other/Ma/en agencies/Cc.p/en))) "
+            "(+/B.aam/. sea/Cc.s/en ice/Cc.s/en changes/Cc.p/en) (since/Tt/en 1979/C#/en))"
+        )
         edge = hedge(edge_str)
 
-        self.assertEqual(edge.edges_with_argrole('s'), [])
-        self.assertEqual(edge.edges_with_argrole('o'), [])
-        self.assertEqual(edge.edges_with_argrole('x'), [])
-        self.assertEqual(edge.edges_with_argrole('p'), [])
+        assert edge.arguments_with_role("s") == []
+        assert edge.arguments_with_role("o") == []
+        assert edge.arguments_with_role("x") == []
+        assert edge.arguments_with_role("p") == []
 
-    def test_edges_with_argrole_atom(self):
-        edge = hedge('tracking/Pd.sox.|pg---/en')
+    def test_arguments_with_role_atom(self):
+        edge = hedge("tracking/Pd.sox.|pg---/en")
 
-        self.assertEqual(edge.edges_with_argrole('s'), [])
-        self.assertEqual(edge.edges_with_argrole('o'), [])
-        self.assertEqual(edge.edges_with_argrole('x'), [])
-        self.assertEqual(edge.edges_with_argrole('p'), [])
-
-    def test_main_concepts1(self):
-        concept = hedge("('s/Bp.am zimbabwe/Mp economy/Cn.s)")
-        self.assertEqual(concept.main_concepts(), [hedge('economy/Cn.s')])
-
-    def test_main_concepts2(self):
-        concept = hedge("('s/Bp zimbabwe/Mp economy/Cn.s)")
-        self.assertEqual(concept.main_concepts(), [])
-
-    def test_main_concepts3(self):
-        concept = hedge('(+/B.am?/. hiv/Ca kit/Cn.s (testing/M self/Cn.s))')
-        self.assertEqual(concept.main_concepts(), [hedge('kit/Cn.s')])
-
-    def test_main_concepts4(self):
-        concept = hedge('(+/B.?a?/. hiv/Ca kit/Cn.s (testing/M self/Cn.s))')
-        self.assertEqual(concept.main_concepts(), [])
-
-    def test_main_concepts5(self):
-        concept = hedge('(a/M thing/C)')
-        self.assertEqual(concept.main_concepts(), [])
-
-    def test_main_concepts6(self):
-        concept = hedge('thing/C')
-        self.assertEqual(concept.main_concepts(), [])
+        assert edge.arguments_with_role("s") == []
+        assert edge.arguments_with_role("o") == []
+        assert edge.arguments_with_role("x") == []
+        assert edge.arguments_with_role("p") == []
 
     def test_check_correctness_ok1(self):
-        edge = hedge('(red/M shoes/C)')
+        edge = hedge("(red/M shoes/C)")
         output = edge.check_correctness()
-        self.assertEqual(output, {})
+        assert output == {}
 
     def test_check_correctness_ok2(self):
-        edge = hedge('(+/B.am john/C smith/C)')
+        edge = hedge("(+/B.am john/C smith/C)")
         output = edge.check_correctness()
-        self.assertEqual(output, {})
+        assert output == {}
 
     def test_check_correctness_ok3(self):
-        edge = hedge('(in/T 1976/C)')
+        edge = hedge("(in/T 1976/C)")
         output = edge.check_correctness()
-        self.assertEqual(output, {})
+        assert output == {}
 
     def test_check_correctness_ok4(self):
-        edge = hedge('(happened/P.sxx it/C before/C (in/T 1976/C))')
+        edge = hedge("(happened/P.sxx it/C before/C (in/T 1976/C))")
         output = edge.check_correctness()
-        self.assertEqual(output, {})
+        assert output == {}
 
     def test_check_correctness_ok5(self):
-        edge = hedge('(and/J red/C green/C blue/C)')
+        edge = hedge("(and/J red/C green/C blue/C)")
         output = edge.check_correctness()
-        self.assertEqual(output, {})
+        assert output == {}
 
     def test_check_correctness_ok6(self):
-        edge = hedge('(likes/P.sc x/C y/C)')
+        edge = hedge("(likes/P.sc x/C y/C)")
         output = edge.check_correctness()
-        self.assertEqual(output, {})
+        assert output == {}
 
     def test_check_correctness_ok7(self):
-        edge = hedge('(not/M likes/P.sc)')
+        edge = hedge("(not/M likes/P.sc)")
         output = edge.check_correctness()
-        self.assertEqual(output, {})
+        assert output == {}
 
     def test_check_correctness_wrong1(self):
-        edge = hedge('x/G')
+        edge = hedge("x/G")
         output = edge.check_correctness()
-        self.assertTrue(edge in output)
+        assert edge in output
 
     def test_check_correctness_wrong2(self):
-        edge = hedge('(of/C capital/C mars/C)')
+        edge = hedge("(of/C capital/C mars/C)")
         output = edge.check_correctness()
-        self.assertTrue(edge in output)
+        assert edge in output
 
     def test_check_correctness_wrong3(self):
-        edge = hedge('(+/B john/C smith/C iii/C)')
+        edge = hedge("(+/B john/C smith/C iii/C)")
         output = edge.check_correctness()
-        self.assertTrue(edge in output)
+        assert edge in output
 
     def test_check_correctness_wrong4(self):
-        edge = hedge('(of/B capital/C red/M)')
+        edge = hedge("(of/B capital/C red/M)")
         output = edge.check_correctness()
-        self.assertTrue(edge in output)
+        assert edge in output
 
     def test_check_correctness_wrong5(self):
-        edge = hedge('(in/T 1976/C 1977/C)')
+        edge = hedge("(in/T 1976/C 1977/C)")
         output = edge.check_correctness()
-        self.assertTrue(edge in output)
+        assert edge in output
 
     def test_check_correctness_wrong6(self):
-        edge = hedge('(in/T red/M)')
+        edge = hedge("(in/T red/M)")
         output = edge.check_correctness()
-        self.assertTrue(edge in output)
+        assert edge in output
 
     def test_check_correctness_wrong7(self):
-        edge = hedge('(is/P red/M)')
+        edge = hedge("(is/P red/M)")
         output = edge.check_correctness()
-        self.assertTrue(edge in output)
+        assert edge in output
 
     def test_check_correctness_wrong8(self):
-        edge = hedge('(and/J one/C)')
+        edge = hedge("(and/J one/C)")
         output = edge.check_correctness()
-        self.assertTrue(edge in output)
+        assert edge in output
 
     def test_check_correctness_wrong_deep1(self):
-        edge = hedge('(:/J x/C x/G)')
+        edge = hedge("(:/J x/C x/G)")
         output = edge.check_correctness()
-        self.assertTrue(hedge('x/G') in output)
+        assert hedge("x/G") in output
 
     def test_check_correctness_wrong_deep2(self):
-        edge = hedge('(:/J x/C (of/C capital/C mars/C))')
+        edge = hedge("(:/J x/C (of/C capital/C mars/C))")
         output = edge.check_correctness()
-        self.assertTrue(hedge('(of/C capital/C mars/C)') in output)
+        assert hedge("(of/C capital/C mars/C)") in output
 
     def test_check_correctness_wrong_deep3(self):
-        edge = hedge('(:/J x/C (+/B john/C smith/C iii/C))')
+        edge = hedge("(:/J x/C (+/B john/C smith/C iii/C))")
         output = edge.check_correctness()
-        self.assertTrue(hedge('(+/B john/C smith/C iii/C)') in output)
+        assert hedge("(+/B john/C smith/C iii/C)") in output
 
     def test_check_correctness_wrong_deep4(self):
-        edge = hedge('(:/J x/C (of/B capital/C red/M))')
+        edge = hedge("(:/J x/C (of/B capital/C red/M))")
         output = edge.check_correctness()
-        self.assertTrue(hedge('(of/B capital/C red/M)') in output)
+        assert hedge("(of/B capital/C red/M)") in output
 
     def test_check_correctness_wrong_deep5(self):
-        edge = hedge('(:/J x/C (in/T 1976/C 1977/C))')
+        edge = hedge("(:/J x/C (in/T 1976/C 1977/C))")
         output = edge.check_correctness()
-        self.assertTrue(hedge('(in/T 1976/C 1977/C)') in output)
+        assert hedge("(in/T 1976/C 1977/C)") in output
 
     def test_check_correctness_wrong_deep6(self):
-        edge = hedge('(:/J x/C (in/T red/M))')
+        edge = hedge("(:/J x/C (in/T red/M))")
         output = edge.check_correctness()
-        self.assertTrue(hedge('(in/T red/M)') in output)
+        assert hedge("(in/T red/M)") in output
 
     def test_check_correctness_wrong_deep7(self):
-        edge = hedge('(:/J x/C (is/P red/M))')
+        edge = hedge("(:/J x/C (is/P red/M))")
         output = edge.check_correctness()
-        self.assertTrue(hedge('(is/P red/M)') in output)
+        assert hedge("(is/P red/M)") in output
 
     def test_check_correctness_wrong_deep8(self):
-        edge = hedge('(:/J x/C (and/J one/C))')
+        edge = hedge("(:/J x/C (and/J one/C))")
         output = edge.check_correctness()
-        self.assertTrue(hedge('(and/J one/C)') in output)
+        assert hedge("(and/J one/C)") in output
 
     def test_check_correctness_wrong_argroles1(self):
-        edge = hedge('(likes/P.ss x/C y/C)')
+        edge = hedge("(likes/P.ss x/C y/C)")
         output = edge.check_correctness()
-        self.assertTrue(hedge('(likes/P.ss x/C y/C)') in output)
-
-    def test_check_correctness_wrong_argroles2(self):
-        edge = hedge('(likes/P.cc x/C y/C)')
-        output = edge.check_correctness()
-        self.assertTrue(hedge('(likes/P.cc x/C y/C)') in output)
+        assert hedge("(likes/P.ss x/C y/C)") in output
 
     def test_check_correctness_wrong_argroles3(self):
-        edge = hedge('(likes/P.scx x/C y/C)')
+        edge = hedge("(likes/P.scx x/C y/C)")
         output = edge.check_correctness()
-        self.assertTrue(hedge('(likes/P.scx x/C y/C)') in output)
+        assert hedge("(likes/P.scx x/C y/C)") in output
 
     def test_check_correctness_wrong_argroles4(self):
-        edge = hedge('(likes/P.sz x/C y/C)')
+        edge = hedge("(likes/P.sz x/C y/C)")
         output = edge.check_correctness()
-        self.assertTrue(hedge('(likes/P.sz x/C y/C)') in output)
+        assert hedge("(likes/P.sz x/C y/C)") in output
 
     def test_check_correctness_wrong_argroles5(self):
-        edge = hedge('(likes/B.sc x/C y/C)')
+        edge = hedge("(likes/B.sc x/C y/C)")
         output = edge.check_correctness()
-        self.assertTrue(hedge('(likes/B.sc x/C y/C)') in output)
+        assert hedge("(likes/B.sc x/C y/C)") in output
 
     def test_check_correctness_wrong_argroles6(self):
-        edge = hedge('(likes/P x/C y/C)')
+        edge = hedge("(likes/P x/C y/C)")
         output = edge.check_correctness()
-        self.assertTrue(hedge('(likes/P x/C y/C)') in output)
-    
+        assert hedge("(likes/P x/C y/C)") in output
+
     def test_normalized_1(self):
-        edge = hedge('(plays/Pd.os chess/C mary/C)')
-        self.assertEqual(edge.normalized(), hedge('(plays/Pd.so mary/C chess/C)'))
+        edge = hedge("(plays/Pd.os chess/C mary/C)")
+        assert edge.normalise() == hedge("(plays/Pd.so mary/C chess/C)")
 
     def test_normalized_2(self):
-        edge = hedge('(plays/Pd chess/C mary/C)')
-        self.assertEqual(edge.normalized(), hedge('(plays/Pd chess/C mary/C)'))
+        edge = hedge("(plays/Pd chess/C mary/C)")
+        assert edge.normalise() == hedge("(plays/Pd chess/C mary/C)")
 
     def test_normalized_3(self):
-        edge = hedge('(plays/Pd.os (of/B.am chess/C games/C) mary/C)')
-        self.assertEqual(edge.normalized(), hedge('(plays/Pd.so mary/C (of/B.ma games/C chess/C))'))
+        edge = hedge("(plays/Pd.os (of/B.am chess/C games/C) mary/C)")
+        assert edge.normalise() == hedge(
+            "(plays/Pd.so mary/C (of/B.ma games/C chess/C))"
+        )
 
     def test_normalized_4(self):
-        edge = hedge('(plays/Pd.os.xxx/en chess/C mary/C)')
-        self.assertEqual(edge.normalized(), hedge('(plays/Pd.so.xxx/en mary/C chess/C)'))
+        edge = hedge("(plays/Pd.os.xxx/en chess/C mary/C)")
+        assert edge.normalise() == hedge("(plays/Pd.so.xxx/en mary/C chess/C)")
 
     def test_normalized_5(self):
-        edge = hedge('plays/Pd.os.xxx/en')
-        self.assertEqual(edge.normalized(), hedge('plays/Pd.so.xxx/en'))
+        edge = hedge("plays/Pd.os.xxx/en")
+        assert edge.normalise() == hedge("plays/Pd.so.xxx/en")
 
     def test_normalized_6(self):
-        edge = hedge('of/Br.am/en')
-        self.assertEqual(edge.normalized(), hedge('of/Br.ma/en'))
+        edge = hedge("of/Br.am/en")
+        assert edge.normalise() == hedge("of/Br.ma/en")
 
     def test_normalized_7(self):
-        edge = hedge('plays/Pd.{os}.xxx/en')
-        self.assertEqual(edge.normalized(), hedge('plays/Pd.{so}.xxx/en'))
+        edge = hedge("plays/Pd.{os}.xxx/en")
+        assert edge.normalise() == hedge("plays/Pd.{so}.xxx/en")
 
     def test_bug_fix1(self):
-        edge_str = '((ahead/M/en (would/Mm/en go/P..-i-----/en)))'
+        edge_str = "((ahead/M/en (would/Mm/en go/P..-i-----/en)))"
         edge = hedge(edge_str)
-        self.assertEqual(edge_str, str(edge))
+        assert edge_str == str(edge)
 
     def test_remove_argroles_atom1(self):
-        edge = hedge('come/Pd.sx')
-        self.assertEqual(edge.remove_argroles().to_str(), 'come/Pd')
+        edge = hedge("come/Pd.sx")
+        assert str(edge.remove_argroles()) == "come/Pd"
 
     def test_remove_argroles_atom2(self):
-        edge = hedge('come/Pd')
-        self.assertEqual(edge.remove_argroles().to_str(), 'come/Pd')
+        edge = hedge("come/Pd")
+        assert str(edge.remove_argroles()) == "come/Pd"
 
     def test_replace_argroles_atom_none(self):
-        edge = hedge('come/Pd.sx')
-        self.assertEqual(edge.replace_argroles(None).to_str(), 'come/Pd')
+        edge = hedge("come/Pd.sx")
+        assert str(edge.replace_argroles(None)) == "come/Pd"
 
     def test_replace_argroles_atom_empty(self):
-        edge = hedge('come/Pd.sx')
-        self.assertEqual(edge.replace_argroles('').to_str(), 'come/Pd')
+        edge = hedge("come/Pd.sx")
+        assert str(edge.replace_argroles("")) == "come/Pd"
 
     def test_replace_argroles_edge_none(self):
-        edge = hedge('(come/Pd.sx you/C here/C)')
-        self.assertEqual(edge.replace_argroles(None).to_str(), '(come/Pd you/C here/C)')
+        edge = hedge("(come/Pd.sx you/C here/C)")
+        assert str(edge.replace_argroles(None)) == "(come/Pd you/C here/C)"
 
     def test_replace_argroles_edge_empty(self):
-        edge = hedge('(come/Pd.sx you/C here/C)')
-        self.assertEqual(edge.replace_argroles('').to_str(), '(come/Pd you/C here/C)')
+        edge = hedge("(come/Pd.sx you/C here/C)")
+        assert str(edge.replace_argroles("")) == "(come/Pd you/C here/C)"
 
     def test_replace_argroles_deep_none(self):
-        edge = hedge('((not/M is/P.sc) bob/C sad/C)')
-        self.assertEqual(edge.replace_argroles(None).to_str(), '((not/M is/P) bob/C sad/C)')
+        edge = hedge("((not/M is/P.sc) bob/C sad/C)")
+        assert str(edge.replace_argroles(None)) == "((not/M is/P) bob/C sad/C)"
 
-if __name__ == '__main__':
+    def test_transform_preserve_example(self):
+        edge = hedge(
+            "((was/Mm performed/Pd.ox) (the/Md experience) (by/Ta scientists/Cc))"
+        )
+        result = edge.transform(
+            hedge("(X/P.{x} (Y/Ta Z))"),
+            hedge("((Y/Mx X/P.{s}) Z)"),
+        )
+        assert str(result) == (
+            "((by/Mx (was/Mm performed/Pd.os)) (the/Md experience) scientists/Cc)"
+        )
+
+    def test_transform_strict_example(self):
+        edge = hedge(
+            "((was/Mm performed/Pd.ox) (the/Md experience) (by/Ta scientists/Cc))"
+        )
+        result = edge.transform(
+            hedge("(X/P.{x} (Y/Ta Z))"),
+            hedge("((Y/Mx X/P.s) Z)"),
+        )
+        assert str(result) == "((by/Mx (was/Mm performed/Pd.s)) scientists/Cc)"
+
+    def test_transform_preserve_uses_matcher_bindings(self):
+        # Origin pattern's variable Y could greedily match the first edge arg
+        # (and/Jx ...), but the matcher actually binds Y to it/Ci so that
+        # (Z1/Ta Z2) can match the by/Ta arg. The transform must consume args
+        # according to the matcher's bindings -- otherwise (and/Jx ...) is
+        # dropped and it/Ci ends up duplicated.
+        edge = hedge(
+            "((is/Mm powered/Pd.xsx) (and/Jx active/Cp excite/Cp) it/Ci"
+            " (by/Ta (a/Md (hybrid/Ma powertrain/Cc))))"
+        )
+        result = edge.transform(
+            hedge("(X/P.{sx}-o Y (Z1/Ta Z2))"),
+            hedge("(X/P.{os} Y (Z1/Ta Z2))"),
+        )
+        assert str(result) == (
+            "((is/Mm powered/Pd.xos) (and/Jx active/Cp excite/Cp) it/Ci"
+            " (by/Ta (a/Md (hybrid/Ma powertrain/Cc))))"
+        )
+
+    def test_transform_no_match_unchanged(self):
+        edge = hedge("(eats/Pd.so john/C apples/C)")
+        result = edge.transform(
+            hedge("(X/P.{x} (Y/Ta Z))"),
+            hedge("((Y/Mx X/P.{s}) Z)"),
+        )
+        assert result == edge
+
+    def test_transform_constant_replacement(self):
+        edge = hedge("(yesterday/Mt died/Mn fido/Cc)")
+        result = edge.transform(hedge("died/Mn"), hedge("died/Md"))
+        assert str(result) == "(yesterday/Mt died/Md fido/Cc)"
+
+    def test_transform_atomic_binding_type_change(self):
+        edge = hedge("by/Ta")
+        result = edge.transform(hedge("Y/Ta"), hedge("Y/Mx"))
+        assert str(result) == "by/Mx"
+
+    def test_transform_modifier_wrapped_descent(self):
+        # Y is bound to a modifier-wrapped trigger (immediately/M by/Ta).
+        # Target Y/Mx must rewrite the inner atom by/Ta -> by/Mx, leaving
+        # the modifier nesting intact.
+        edge = hedge(
+            "((had/Mm done/Pd.ox) (the/Md task) ((immediately/M by/Ta) someone/Cc))"
+        )
+        result = edge.transform(
+            hedge("(X/P.{x} (Y/Ta Z))"),
+            hedge("((Y/Mx X/P.{s}) Z)"),
+        )
+        assert str(result) == (
+            "(((immediately/M by/Mx) (had/Mm done/Pd.os)) (the/Md task) someone/Cc)"
+        )
+
+    def test_transform_non_atomic_type_change_no_descent_raises(self):
+        # Y is bound to a relation (multiple inner atoms, type R != inner
+        # atom's type). The descent guard refuses, so a type change raises.
+        edge = hedge("(say/Pd.so john/C (eats/Pd.so mary/C apples/C))")
+        with pytest.raises(ValueError):
+            edge.transform(
+                hedge("(say/Pd.so X Y)"),
+                hedge("(say/Pd.so X Y/M)"),
+            )
+
+    def test_transform_anonymous_wildcard_raises(self):
+        edge = hedge("(eats/Pd.so john/C apples/C)")
+        with pytest.raises(ValueError):
+            edge.transform(hedge("(* X Y)"), hedge("(X Y)"))
+        with pytest.raises(ValueError):
+            edge.transform(hedge("(eats/Pd.so X ...)"), hedge("(X)"))
+
+    def test_transform_target_var_not_in_origin_raises(self):
+        edge = hedge("(eats/Pd.so john/C apples/C)")
+        with pytest.raises(ValueError):
+            edge.transform(hedge("(eats/Pd.so X Y)"), hedge("(eats/Pd.so W X)"))
+
+    def test_transform_origin_var_unused_in_target(self):
+        edge = hedge("(eats/Pd.so john/C apples/C)")
+        result = edge.transform(
+            hedge("(eats/Pd.so X Y)"),
+            hedge("(eats/Pd.s X)"),
+        )
+        assert str(result) == "(eats/Pd.s john/C)"
+
+    def test_transform_recursive_multi_level(self):
+        edge = hedge("(say/Pd.so john/C (say/Pd.so mary/C something/C))")
+        result = edge.transform(
+            hedge("(say/Pd.so X Y)"),
+            hedge("(told/Pd.so X Y)"),
+        )
+        assert str(result) == "(told/Pd.so john/C (told/Pd.so mary/C something/C))"
+
+    def test_transform_shallow(self):
+        edge = hedge("(say/Pd.so john/C (say/Pd.so mary/C something/C))")
+        result = edge.transform(
+            hedge("(say/Pd.so X Y)"),
+            hedge("(told/Pd.so X Y)"),
+            recursive=False,
+        )
+        assert str(result) == "(told/Pd.so john/C (say/Pd.so mary/C something/C))"
+
+    def test_transform_atomic_edge_non_atom_origin_unchanged(self):
+        edge = hedge("foo/C")
+        result = edge.transform(hedge("(eats/Pd.so X Y)"), hedge("(X Y)"))
+        assert result == edge
+
+    def test_transform_bare_variable_substitution(self):
+        edge = hedge("(eats/Pd.so john/C apples/C)")
+        result = edge.transform(hedge("(eats/Pd.so X Y)"), hedge("Y"))
+        assert str(result) == "apples/C"
+
+    def test_tok_pos_tree_round_trip(self):
+        from hyperbase.parsers.result import ParseResult
+        from hyperbase.transforms import tok_pos_tree
+
+        original = "(2 (0 1) 3)"
+        pr = ParseResult(
+            edge=hedge("(is/P.so (the/M sky/C) blue/C)"),
+            text="The sky is blue.",
+            tokens=["The", "sky", "is", "blue", "."],
+            tok_pos=hedge(original),
+        )
+        loaded = hedge(pr)
+        regenerated = tok_pos_tree(loaded)
+        assert str(regenerated) == original
+
+    def test_tok_pos_tree_synthetic_atom(self):
+        from hyperbase.parsers.result import ParseResult
+        from hyperbase.transforms import tok_pos_tree
+
+        original = "(-1 0 2)"
+        pr = ParseResult(
+            edge=hedge("(+/B a/C b/C)"),
+            text="a and b",
+            tokens=["a", "and", "b"],
+            tok_pos=hedge(original),
+        )
+        loaded = hedge(pr)
+        regenerated = tok_pos_tree(loaded)
+        assert str(regenerated) == original
+
+    def test_transform_preserves_metadata_on_atoms(self):
+        from hyperbase.parsers.result import ParseResult
+        from hyperbase.transforms import tok_pos_tree
+
+        pr = ParseResult(
+            edge=hedge("(eats/Pd.so john/C apples/C)"),
+            text="John eats apples",
+            tokens=["John", "eats", "apples"],
+            tok_pos=hedge("(1 0 2)"),
+        )
+        loaded = hedge(pr)
+        # Decoration-only change on atoms keeps tok_pos and text_span.
+        result = loaded.transform(
+            hedge("(eats/Pd.so X Y)"),
+            hedge("(eats/Pd.so X/Cp Y/Cp)"),
+        )
+        # John was at position 0, apples at position 2.
+        assert result[1].tok_pos == 0
+        assert result[1].text_span == (0, 4)
+        assert result[2].tok_pos == 2
+        assert result[2].text_span == (10, 16)
+        # Round-trip yields a structurally-coherent tok_pos tree.
+        assert str(tok_pos_tree(result)) == "(1 0 2)"
+
+    def test_simplify_preserves_tok_pos(self):
+        from hyperbase.parsers.result import ParseResult
+
+        pr = ParseResult(
+            edge=hedge("(is/Pd.so (the/Md sky/Cn) blue/Cc)"),
+            text="The sky is blue",
+            tokens=["The", "sky", "is", "blue"],
+            tok_pos=hedge("(2 (0 1) 3)"),
+        )
+        loaded = hedge(pr)
+        simplified = loaded.simplify()
+        # Find the simplified blue atom and verify metadata survived.
+        assert simplified[2].tok_pos == 3
+        assert simplified[2].text_span == (11, 15)
+
+    def test_replace_argroles_preserves_tok_pos(self):
+        from hyperbase.parsers.result import ParseResult
+
+        pr = ParseResult(
+            edge=hedge("(is/P.sc john/C tired/C)"),
+            text="John is tired",
+            tokens=["John", "is", "tired"],
+            tok_pos=hedge("(1 0 2)"),
+        )
+        loaded = hedge(pr)
+        result = loaded.replace_argroles("os")
+        # Connector was at position 1.
+        assert result[0].tok_pos == 1
+        assert result[0].text_span == (5, 7)
+
+    def test_transform_partial_match_unchanged(self):
+        # The matcher returns a partial binding {X: ...} (no Y, Z) when the
+        # x-position arg cannot match (Y/Ta Z). transform must treat this as
+        # no-match rather than blowing up on the unbound Y / Z.
+        edge = hedge("((had/Mm done/Pd.ox) (the/Md task) by/Ta)")
+        result = edge.transform(
+            hedge("(X/P.{x} (Y/Ta Z))"),
+            hedge("((Y/Mx X/P.{s}) Z)"),
+        )
+        assert result == edge
+
+    def test_transform_preserves_root_text_same_roots(self):
+        from hyperbase.parsers.result import ParseResult
+
+        pr = ParseResult(
+            edge=hedge("(eats/Pd.so john/C apples/C)"),
+            text="John eats apples",
+            tokens=["John", "eats", "apples"],
+            tok_pos=hedge("(1 0 2)"),
+        )
+        loaded = hedge(pr)
+        # Decoration-only changes leave the atom roots untouched: text and
+        # source tokens flow through to the result root verbatim.
+        result = loaded.transform(
+            hedge("(eats/Pd.so X Y)"),
+            hedge("(eats/Pd.so X/Cp Y/Cp)"),
+        )
+        assert result.text == "John eats apples"
+        assert result.tokens == ("John", "eats", "apples")
+
+    def test_transform_derives_root_text_when_roots_change(self):
+        from hyperbase.parsers.result import ParseResult
+
+        pr = ParseResult(
+            edge=hedge("(eats/Pd.so john/C apples/C)"),
+            text="John eats apples",
+            tokens=["John", "eats", "apples"],
+            tok_pos=hedge("(1 0 2)"),
+        )
+        loaded = hedge(pr)
+        # Drop the predicate via the {} preserve form: the resulting root has
+        # a different atom-root set, so text is derived from atom spans.
+        result = loaded.transform(
+            hedge("(eats/Pd.so X Y)"),
+            hedge("Y"),
+        )
+        # Y -> apples/C with text_span (10, 16) in "John eats apples".
+        assert str(result) == "apples/C"
+        assert result.text == "apples"
+
+    def test_replace_argroles_preserves_root_text(self):
+        from hyperbase.parsers.result import ParseResult
+
+        pr = ParseResult(
+            edge=hedge("(is/P.sc john/C tired/C)"),
+            text="John is tired",
+            tokens=["John", "is", "tired"],
+            tok_pos=hedge("(1 0 2)"),
+        )
+        loaded = hedge(pr)
+        result = loaded.replace_argroles("os")
+        assert result.text == "John is tired"
+        assert result.tokens == ("John", "is", "tired")
+
+    def test_add_argument_preserves_root_text_when_arg_in_source(self):
+        from hyperbase.parsers.result import ParseResult
+
+        pr = ParseResult(
+            edge=hedge("(eats/Pd.so john/C)"),
+            text="John eats apples",
+            tokens=["John", "eats", "apples"],
+            tok_pos=hedge("(1 0)"),
+        )
+        loaded = hedge(pr)
+        # Build the new arg from the parse so it carries source spans.
+        apples_pr = ParseResult(
+            edge=hedge("apples/C"),
+            text="John eats apples",
+            tokens=["John", "eats", "apples"],
+            tok_pos=hedge("2"),
+        )
+        apples = hedge(apples_pr)
+        result = loaded.add_argument(apples, "o")
+        # Roots changed (added apples), so text is derived. Slice spans
+        # from John to apples — the full source text.
+        assert result.text == "John eats apples"
+
+    def test_transform_constant_inherits_metadata_by_root(self):
+        from hyperbase.parsers.result import ParseResult
+
+        pr = ParseResult(
+            edge=hedge("(yesterday/Mt died/Mn fido/Cc)"),
+            text="Yesterday died Fido",
+            tokens=["Yesterday", "died", "Fido"],
+            tok_pos=hedge("(0 1 2)"),
+        )
+        loaded = hedge(pr)
+        # died/Md (constant target) shares root with died/Mn in the original;
+        # tok_pos and text_span must be inherited even though the decoration
+        # changed.
+        result = loaded.transform(hedge("died/Mn"), hedge("died/Md"))
+        assert str(result) == "(yesterday/Mt died/Md fido/Cc)"
+        assert result[1].tok_pos == 1
+        assert result[1].text_span == (10, 14)
+
+    def test_replace_atom_inherits_metadata_when_same_root(self):
+        from hyperbase.parsers.result import ParseResult
+
+        pr = ParseResult(
+            edge=hedge("(eats/Pd.so john/C apples/C)"),
+            text="John eats apples",
+            tokens=["John", "eats", "apples"],
+            tok_pos=hedge("(1 0 2)"),
+        )
+        loaded = hedge(pr)
+        old = loaded[2]  # apples/C with tok_pos=2, text_span=(10, 16)
+        new = hedge("apples/Cp")  # bare atom, no metadata
+        result = loaded.replace_atom(old, new)
+        # Metadata flows through because the root matches.
+        assert str(result[2]) == "apples/Cp"
+        assert result[2].tok_pos == 2
+        assert result[2].text_span == (10, 16)
+
+    def test_replace_atom_no_inherit_when_root_differs(self):
+        from hyperbase.parsers.result import ParseResult
+
+        pr = ParseResult(
+            edge=hedge("(eats/Pd.so john/C apples/C)"),
+            text="John eats apples",
+            tokens=["John", "eats", "apples"],
+            tok_pos=hedge("(1 0 2)"),
+        )
+        loaded = hedge(pr)
+        old = loaded[2]
+        new = hedge("oranges/C")
+        result = loaded.replace_atom(old, new)
+        assert str(result[2]) == "oranges/C"
+        assert result[2].tok_pos is None
+        assert result[2].text_span is None
+
+
+if __name__ == "__main__":
     unittest.main()

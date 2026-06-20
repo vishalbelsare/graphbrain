@@ -1,0 +1,19 @@
+/* hyperquest.ai brand colors */
+:root,
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: #f1fffb;
+  --md-primary-fg-color--light: #f2f9f8;
+  --md-primary-fg-color--dark: #c6dfd9;
+  --md-primary-bg-color: #45847D;
+  --md-accent-fg-color: #6bcf7f;
+  --md-typeset-a-color: #45847D;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #f1fffb;
+  --md-primary-fg-color--light: #f2f9f8;
+  --md-primary-fg-color--dark: #c6dfd9;
+  --md-primary-bg-color: #45847D;
+  --md-accent-fg-color: #6bcf7f;
+  --md-typeset-a-color: #45847D;
+}
